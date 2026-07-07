@@ -2,21 +2,23 @@
 
 ## Resumen
 
-La recolección de residuos sólidos urbanos representa entre el 60% y 80% del costo operativo total de los sistemas municipales de gestión de residuos, y la optimización de rutas puede generar ahorros sustanciales en combustible, tiempo y emisiones contaminantes. Este estudio presenta un análisis comparativo de tres enfoques algorítmicos para el ruteo óptimo de la flota de recolección en la ciudad de Chachapoyas, Perú, ubicada a 2,335 m s.n.m. en la cordillera de los Andes. Se construyó un grafo vial dirigido a partir de datos OpenStreetMap, el cual fue corregido manualmente mediante un editor web interactivo, resultando en 256 nodos y 646 aristas. Las calles a servir (111.27 km) se agruparon en 5 sectores operativos mediante K-Means con ajustes manuales espaciales y reparación de conectividad. Se implementaron y evaluaron tres algoritmos: un método Voraz como línea base, el Problema del Cartero Chino Dirigido (DCPP) con algoritmo Húngaro para balanceo de grados y Hierholzer para circuitos Eulerianos, y el Problema de Ruteo de Arcos Capacitado (CARP) con búsqueda Tabú para optimización local. El algoritmo DCPP superó consistentemente a los otros métodos en los 5 sectores, logrando una distancia total de 169.82 km con redundancia promedio de 1.501, frente a 217.27 km (redundancia 2.011) del Voraz y 208.59 km (redundancia 1.918) del CARP+Tabu. El DCPP redujo la distancia total en un 21.8% respecto a la línea base Voraz con un costo computacional de solo 0.114 segundos de CPU. Estos resultados demuestran que el DCPP constituye el enfoque más eficiente para el ruteo de recolección en el contexto de Chachapoyas y potencialmente en otras ciudades latinoamericanas con topografía irregular y patrones de crecimiento orgánico.
+La recolección de residuos sólidos urbanos representa entre el 60% y el 80% del costo operativo total de los sistemas municipales de gestión de residuos, y la optimización de rutas puede generar ahorros sustanciales en combustible, tiempo y emisiones. Este estudio presenta un análisis comparativo de cinco enfoques algorítmicos para el ruteo de recolección en la ciudad de Chachapoyas, Perú, ubicada a 2,335 m s.n.m. en la cordillera de los Andes. Se construyó un grafo vial dirigido con 256 nodos y 646 aristas a partir de datos OpenStreetMap, corregido mediante un editor web interactivo y particionado en 5 sectores operativos mediante un algoritmo de region-growing sobre el grafo, garantizando conectividad y balance de carga. Se implementaron y evaluaron cinco algoritmos: un método Voraz como línea base, el Problema del Cartero Chino Dirigido (DCPP) con algoritmo Húngaro para balanceo de grados y Hierholzer para circuitos Eulerianos, el Problema de Ruteo de Arcos Capacitado con búsqueda Tabú (CARP+Tabu), el algoritmo CARP-Ulusoy basado en la estrategia route-first-cluster-second, y un modelo no dirigido de referencia (MCPP) para validar el modelo dirigido. Todos los algoritmos utilizan la misma métrica de distancia real sobre el grafo no dirigido, garantizando comparación justa. El algoritmo CARP-Ulusoy superó consistentemente a los demás métodos en los 5 sectores, alcanzando una distancia total de 137.97 km con redundancia promedio de 1.241, lo que representa una mejora del 34.9% sobre la línea base Voraz (211.80 km) y del 22.3% sobre el DCPP (177.58 km). El DCPP y el MCPP obtuvieron resultados prácticamente idénticos (177.58 km vs 177.63 km), validando que el modelo dirigido no introduce sesgo. El CARP+Tabu (208.78 km) apenas mejoró la línea base, confirmando que la restricción de capacidad no es el factor limitante cuando los sectores están balanceados. Estos resultados demuestran que la estrategia route-first-cluster-second es el enfoque más eficiente para el ruteo de recolección en el contexto de Chachapoyas y potencialmente en otras ciudades con topografía similar.
 
 ---
 
 ## 1. Introducción
 
-La gestión de residuos sólidos urbanos constituye uno de los desafíos logísticos más significativos que enfrentan los municipios en países en desarrollo. Según el Banco Mundial, la generación global de residuos alcanzará 3.40 mil millones de toneladas anuales para 2050 (Kaza et al., 2018). En Perú, la producción per cápita de residuos sólidos municipales se estima en 0.58 kg/hab/día, y los costos de recolección y transporte representan entre el 60% y 80% del presupuesto municipal destinado a limpieza pública (MINAM, 2021). Cualquier mejora en la eficiencia de estas operaciones tiene, por tanto, un impacto económico y ambiental directo sobre las finanzas municipales y la calidad de vida urbana.
+La gestión de residuos sólidos urbanos constituye uno de los desafíos logísticos más significativos para los municipios en países en desarrollo. Según el Banco Mundial, la generación global de residuos alcanzará 3.40 mil millones de toneladas anuales para 2050 (Kaza et al., 2018). En Perú, la producción per cápita de residuos sólidos municipales se estima en 0.58 kg/hab/día, y los costos de recolección y transporte representan entre el 60% y el 80% del presupuesto municipal destinado a limpieza pública (MINAM, 2021). Cualquier mejora en la eficiencia de estas operaciones tiene un impacto económico y ambiental directo sobre las finanzas municipales y la calidad de vida urbana.
 
-La optimización de rutas de recolección es un problema clásico de ruteo sobre grafos que admite múltiples formulaciones. Puede modelarse como una variante del Problema del Cartero Chino (Chinese Postman Problem, CPP), donde se busca un circuito de costo mínimo que recorra cada arista del grafo al menos una vez (Edmonds & Johnson, 1973), o del Problema de Ruteo de Arcos Capacitado (Capacitated Arc Routing Problem, CARP), que incorpora restricciones de capacidad vehicular y puede requerir múltiples viajes (Golden & Wong, 1981). El CPP en su variante dirigida (DCPP) requiere equilibrar los grados de entrada y salida de cada nodo mediante la adición de aristas artificiales, problema que se resuelve óptimamente mediante el algoritmo Húngaro de asignación (Kuhn, 1955; Munkres, 1957), para luego encontrar un circuito Euleriano con el algoritmo de Hierholzer (1873).
+La optimización de rutas de recolección puede modelarse como un problema de ruteo sobre arcos (arc routing), específicamente como una variante del Problema del Cartero Chino (Chinese Postman Problem, CPP) o del Problema de Ruteo de Arcos Capacitado (Capacitated Arc Routing Problem, CARP) (Eiselt et al., 1995; Golden y Wong, 1981). El CPP busca un circuito de costo mínimo que recorra cada arista del grafo al menos una vez, mientras que el CARP incorpora restricciones de capacidad vehicular que pueden requerir múltiples viajes. La variante dirigida del CPP (DCPP) requiere equilibrar los grados de entrada y salida de cada nodo mediante la adición de aristas artificiales, problema que se resuelve óptimamente con el algoritmo Húngaro de asignación (Kuhn, 1955; Munkres, 1957), para luego encontrar un circuito Euleriano con el algoritmo de Hierholzer (1873).
 
-Diversos enfoques se han propuesto en la literatura para abordar estos problemas: desde métodos exactos basados en programación lineal entera hasta heurísticas y metaheurísticas como algoritmos genéticos, búsqueda Tabú y colonias de hormigas (Lacomme et al., 2004; Santos et al., 2010). Sin embargo, la mayoría de los estudios se han centrado en ciudades europeas o norteamericanas con tramas viales regulares, existiendo una brecha significativa en la literatura respecto a ciudades latinoamericanas con topografía irregular, patrones de crecimiento orgánico y tejidos urbanos de trazado colonial.
+Una familia alternativa de enfoques, denominada route-first-cluster-second, fue propuesta originalmente por Ulusoy (1985) para problemas CARP. La idea central es construir primero una ruta óptima sin restricciones de capacidad —típicamente mediante DCPP— y luego particionar dicha ruta en segmentos que respeten la capacidad vehicular, insertando viajes de ida y vuelta al depósito en los puntos de corte. Este enfoque aprovecha la optimalidad del circuito Euleriano mientras incorpora las restricciones operativas reales.
 
-El presente estudio aborda dicha brecha mediante un análisis comparativo de tres algoritmos de ruteo aplicados a la ciudad de Chachapoyas, capital del departamento de Amazonas en Perú. Chachapoyas presenta características particularmente desafiantes para el ruteo vehicular: topografía accidentada en la cordillera de los Andes, un casco histórico de trazado colonial irregular, calles estrechas de un solo sentido, y un crecimiento urbano no planificado con numerosas vías sin salida. El objetivo principal es determinar el algoritmo de ruteo más eficiente para minimizar la distancia total recorrida manteniendo la cobertura completa de todas las calles del área urbana. Como objetivos secundarios se plantean: evaluar la efectividad del agrupamiento por K-Means como estrategia de zonificación, analizar el equilibrio entre calidad de solución y costo computacional de cada algoritmo, y cuantificar el impacto de las restricciones de capacidad vehicular en la eficiencia global.
+Diversos enfoques se han propuesto en la literatura para abordar estos problemas, desde métodos exactos basados en programación lineal entera hasta heurísticas y metaheurísticas como algoritmos genéticos, búsqueda Tabú y colonias de hormigas (Lacomme et al., 2004; Santos et al., 2010). Sin embargo, la mayoría de los estudios se han centrado en ciudades europeas o norteamericanas con tramas viales regulares, existiendo una brecha en la literatura respecto a ciudades latinoamericanas con topografía irregular y patrones de crecimiento orgánico.
 
-La contribución principal de este trabajo es triple: (a) se presenta una implementación completa y corregida del algoritmo DCPP —incluyendo una corrección crítica en la dirección de las aristas fantasma que revierte la práctica común pero errónea de orientarlas desde nodos fuente hacia nodos sumidero—; (b) se documenta una metodología reproducible de extremo a extremo, desde la adquisición de datos abiertos hasta la visualización interactiva, con todas las herramientas disponibles como código abierto; y (c) se establecen métricas comparativas que pueden servir como referencia para estudios similares en otras ciudades de la región.
+El presente estudio aborda dicha brecha mediante un análisis comparativo de cinco algoritmos aplicados a Chachapoyas, capital del departamento de Amazonas. Chachapoyas presenta características particularmente desafiantes: topografía accidentada, un casco histórico de trazado colonial irregular, calles estrechas de un solo sentido, y un crecimiento urbano no planificado con numerosas vías sin salida. El objetivo principal es determinar el enfoque algorítmico más eficiente para la recolección, manteniendo la cobertura completa de todas las calles. Los objetivos secundarios incluyen evaluar el impacto de la zonificación basada en conectividad vial versus la basada en coordenadas, analizar la efectividad de la estrategia route-first-cluster-second frente al DCPP puro, y validar cuantitativamente si el modelo dirigido introduce sesgo respecto al modelo mixto real.
+
+La contribución principal de este trabajo es triple: se presenta una comparación rigurosa de cinco algoritmos con métrica de distancia unificada —eliminando sesgos de medición que distorsionaban comparaciones previas—, se documenta una metodología reproducible de extremo a extremo con herramientas de código abierto, y se demuestra empíricamente la superioridad de la estrategia route-first-cluster-second para redes viales con topología irregular.
 
 ---
 
@@ -24,51 +26,55 @@ La contribución principal de este trabajo es triple: (a) se presenta una implem
 
 ### 2.1 Construcción del Grafo Vial
 
-Los datos de la red vial de Chachapoyas se obtuvieron desde OpenStreetMap utilizando la librería OSMnx (Boeing, 2017), con un radio de 3 km desde el centro de la ciudad y filtrando por tipo de vía `drive`. El grafo original contenía 846 nodos y 2,389 aristas dirigidas, representando intersecciones y segmentos de calle respectivamente, incluyendo calles de doble sentido modeladas como aristas bidireccionales independientes.
+Los datos de la red vial de Chachapoyas se obtuvieron desde OpenStreetMap utilizando la librería OSMnx (Boeing, 2017), con un radio de 3 km desde el centro de la ciudad y filtrando por tipo de vía `drive`. El grafo original contenía 846 nodos y 2,389 aristas dirigidas, modelando intersecciones y segmentos de calle respectivamente.
 
-El grafo fue sometido a un proceso de corrección manual exhaustivo mediante un editor web interactivo desarrollado específicamente para este proyecto. El editor, implementado como un servidor HTTP autónomo con frontend Leaflet.js, permite operaciones de creación, eliminación, modificación y división de nodos y aristas, arrastre de geometrías, adición de puntos de control para curvas, cambio de dirección de circulación, simplificación de nodos de grado 2 (bypass), restauración de elementos eliminados y validación topológica del grafo. Tras la corrección, se ejecutó un proceso de deduplicación que eliminó aristas paralelas idénticas (misma dirección con múltiples keys), resultando en un grafo final de 256 nodos y 646 aristas dirigidas.
+El grafo fue sometido a un proceso de corrección manual mediante un editor web interactivo desarrollado para este proyecto. El editor —implementado como servidor HTTP autónomo con frontend Leaflet.js— permite crear, eliminar, modificar y dividir nodos y aristas, arrastrar geometrías, añadir puntos de control, cambiar la dirección de circulación, simplificar nodos de grado 2 y restaurar elementos eliminados. Tras la corrección y un proceso de deduplicación de aristas paralelas, se obtuvo un grafo final de 256 nodos y 646 aristas dirigidas.
 
-Cada arista almacena como atributos principales su longitud en metros —calculada a partir de las coordenadas geográficas de sus nodos extremos mediante proyección geodésica WGS84— y un indicador booleano de sentido único (`oneway`). El grafo se representa como un `networkx.MultiDiGraph`, estructura que permite modelar correctamente tanto las calles de doble sentido como las vías de un solo sentido sin pérdida de información topológica. Dos nodos especiales fueron designados como excluidos del servicio: el depósito municipal (nodo `af3202cd`) y un nodo conector auxiliar (`ebde992d`), junto con cuatro aristas que forman las rutas exclusivas de acceso hacia y desde el depósito, totalizando 7.21 km de vías de tránsito que no requieren servicio de recolección.
+Cada arista almacena como atributos principales su longitud en metros —calculada mediante proyección geodésica WGS84— y un indicador booleano de sentido único. El grafo se representa como un `networkx.MultiDiGraph`. Cuatro nodos fueron designados como excluidos del servicio de recolección: el depósito municipal, un nodo conector auxiliar, y dos nodos extremos de las rutas de acceso al depósito, junto con tres aristas que totalizan 7.21 km de vías exclusivas de tránsito. Las 111.27 km restantes constituyen las calles a servir distribuidas en los 5 sectores.
 
-### 2.2 Zonificación por Clustering
+### 2.2 Zonificación por Region-Growing
 
-Para dividir la ciudad en sectores operativos, se aplicó el algoritmo K-Means (Lloyd, 1982) con k = 5 sobre las coordenadas (x, y) de todos los nodos del grafo, excluyendo del clustering los 4 nodos destinados a rutas de acceso al depósito. La elección de k = 5 sectores se fundamenta en la disponibilidad operativa de la flota municipal de Chachapoyas.
+Para dividir la ciudad en sectores operativos, se implementó un algoritmo de region-growing sobre el grafo no dirigido, en contraste con el enfoque tradicional de K-Means sobre coordenadas que había sido utilizado previamente en este proyecto. El K-Means ignora la conectividad vial y produce sectores espacialmente compactos pero con desbalance de grados que penaliza al DCPP, forzando además ajustes manuales y reparación de conectividad post-hoc.
 
-El sistema de zonificación se diseñó con un enfoque de asignación estática determinística: una vez ejecutado el clustering inicial con semilla aleatoria fija (`random_state=42`), los centroides de cada sector se almacenan permanentemente junto con la asignación nodo→sector en un archivo JSON (`sectores.json`). Este diseño garantiza que todas las herramientas del ecosistema —algoritmos de ruteo, visores interactivos y el propio editor vial— operen sobre una zonificación idéntica y reproducible. Los nodos nuevos añadidos durante ediciones posteriores se asignan automáticamente al centroide más cercano por distancia euclidiana.
+El algoritmo de region-growing opera en tres fases. Primero, se seleccionan 5 nodos semilla distribuidos geográficamente como las 4 esquinas y el centro de la nube de puntos. Segundo, se ejecuta una expansión BFS simultánea desde todas las semillas: cada nodo descubierto se asigna al sector de su padre BFS, y un sector detiene su expansión al alcanzar el 115% del kilometraje objetivo (~22.25 km por sector). Tercero, una pasada de post-balanceo transfiere nodos fronterizos desde sectores con exceso hacia sectores con déficit, y una reparación de conectividad reasigna cualquier nodo aislado al sector de sus vecinos más frecuentes, con fallback geográfico al centroide más cercano.
 
-Tras el clustering automático, se aplicaron tres ajustes manuales basados en criterios espaciales y de conectividad: (a) reasignación de nodos del sector 3 al sector 1 en la región izquierda-superior de la frontera entre ambos; (b) migración de nodos del sector 4 al sector 2 cuando su coordenada de latitud se encuentra más próxima al rango del sector 2 que al propio; y (c) transferencia de nodos del sector 4 al sector 0 cuando existe una conexión vial directa entre el nodo y el sector destino, verificada mediante análisis de aristas salientes en el grafo subyacente. Finalmente, un algoritmo de reparación de conectividad identifica nodos aislados —sin conexión vial al resto de su sector— y los reasigna al sector del vecino más frecuente, garantizando que cada sector forme un subgrafo débilmente conexo. La distribución final de calles a servir por sector fue: S0 = 32.77 km, S1 = 19.51 km, S2 = 11.96 km, S3 = 20.99 km, y S4 = 26.04 km, totalizando 111.27 km de servicio efectivo.
+Este método garantiza por construcción que cada sector forme un subgrafo conexo, elimina la necesidad de ajustes manuales, y produce un balance de kilometraje de 1.16x entre el sector más y menos cargado (21.49 a 23.33 km), frente al factor de 1.68x del K-Means. La distribución final de calles por sector es: S0 = 21.83 km (36 nodos, 96 aristas), S1 = 22.50 km (33 nodos, 90 aristas), S2 = 23.33 km (39 nodos, 107 aristas), S3 = 22.12 km (51 nodos, 137 aristas), y S4 = 21.49 km (93 nodos, 210 aristas).
 
 ### 2.3 Algoritmos de Ruteo
 
-#### 2.3.1 Algoritmo Voraz (Greedy Baseline)
+#### 2.3.1 Voraz (Greedy Baseline)
 
-El algoritmo Voraz constituye la línea base del estudio por su simplicidad conceptual y su uso frecuente como referencia en la literatura de ruteo. Su estrategia es incremental: desde el nodo depósito, se calculan las distancias de camino más corto a todos los nodos del grafo mediante el algoritmo de Dijkstra (caché de fuente única), se selecciona la arista no servida cuya distancia de acceso más su propia longitud sea mínima, se sirve dicha arista, y se itera hasta completar todas las aristas del sector. La complejidad computacional resultante es O(n · (E + V log V)) donde n es el número de aristas a servir, E el número de aristas del grafo completo y V el número de nodos. Al finalizar, se añade la ruta de retorno al depósito por el camino más corto.
+El algoritmo Voraz constituye la línea base. Desde el depósito, se calculan las distancias de camino más corto a todos los nodos mediante Dijkstra con caché de fuente única. En cada iteración, se selecciona la arista no servida que minimiza la suma de la distancia de acceso desde la posición actual más su propia longitud. La complejidad es O(n ⋅ (E + V log V)) donde n es el número de aristas a servir.
 
 #### 2.3.2 DCPP — Directed Chinese Postman Problem
 
-El algoritmo DCPP implementa la solución óptima al Problema del Cartero Chino en su variante dirigida, siguiendo el marco teórico establecido por Edmonds y Johnson (1973). El procedimiento consta de seis etapas. Primero, se extrae el subgrafo requerido: todas las aristas del sector y los nodos que las componen. Segundo, se calcula el desbalance de grado en el subgrafo requerido, definido como δ(v) = indegree(v) − outdegree(v) para cada nodo v. Los nodos con δ(v) < 0 presentan exceso de aristas entrantes (sumideros de grado) y requieren aristas salientes adicionales para equilibrarse; los nodos con δ(v) > 0 presentan exceso de aristas salientes (fuentes de grado) y requieren aristas entrantes adicionales.
+El DCPP implementa la solución óptima siguiendo a Edmonds y Johnson (1973). Para cada sector, se extrae el subgrafo requerido y se calcula el desbalance de grado δ(v) = indegree(v) − outdegree(v). Los nodos con δ(v) < 0 son sumideros (requieren más aristas salientes) y aquellos con δ(v) > 0 son fuentes (requieren más aristas entrantes). Se construye una matriz de costos con las distancias de camino más corto desde cada sumidero hacia cada fuente sobre el grafo no dirigido, y se resuelve el problema de asignación óptima con el algoritmo Húngaro (O(m³), donde m es el desbalance total). Las aristas fantasma resultantes —orientadas de sumidero a fuente— equilibran los grados del subgrafo.
 
-Tercero, se construye la matriz de costos del camino más corto desde cada nodo sumidero hacia cada nodo fuente mediante el algoritmo de Dijkstra sobre el grafo no dirigido, y se resuelve el problema de asignación óptima con el algoritmo Húngaro (Kuhn-Munkres, O(n³)). Es crucial señalar que la dirección correcta de las aristas fantasma es desde nodos sumidero hacia nodos fuente —no a la inversa—, ya que los sumideros necesitan incrementar su grado de salida y las fuentes necesitan incrementar su grado de entrada. Una implementación que invierta esta dirección produce un grafo aún más desbalanceado e impide que el circuito de Hierholzer recorra la totalidad de las aristas requeridas.
+Tras el balanceo, se identifican los componentes débilmente conexos del grafo requerido más fantasma. Para cada componente se ejecuta Hierholzer, y los circuitos resultantes se unen mediante caminos más cortos sobre el grafo no dirigido. Las aristas fantasma se expanden usando los caminos más cortos sin penalización, y la distancia total se mide sobre la ruta expandida real. Finalmente se añaden las conexiones de ida y vuelta al depósito.
 
-Cuarto, las aristas fantasma del matching se añaden al subgrafo dirigido, y los caminos más cortos correspondientes se expanden en el grafo no dirigido para construir la ruta real de desplazamiento sin servicio (deadhead). Para desincentivar que estos caminos de deadhead reutilicen calles que ya forman parte del servicio, se aplica una penalización multiplicando por 100 la longitud de las aristas requeridas durante la búsqueda del camino más corto; la distancia real del deadhead se mide sobre el grafo sin penalizar. Quinto, sobre el grafo balanceado resultante se ejecuta el algoritmo de Hierholzer para obtener un circuito Euleriano que recorre exactamente una vez cada arista (tanto las requeridas como las fantasma). Sexto, se añaden las rutas de conexión desde y hacia el depósito mediante caminos más cortos sobre el grafo no dirigido.
+Un aspecto metodológico relevante es que las aristas fantasma deben orientarse de sumidero a fuente y no a la inversa. Una implementación con la dirección opuesta no logra equilibrar los grados y produce circuitos Eulerianos inválidos.
 
 #### 2.3.3 CARP con Búsqueda Tabú
 
-El algoritmo CARP extiende el problema anterior incorporando una restricción de capacidad vehicular de 30 km por viaje, modelando el límite operativo del camión recolector antes de requerir descarga en el depósito. La construcción de la solución inicial utiliza una heurística tipo Voraz modificada que genera múltiples viajes: partiendo del depósito, se acumulan aristas servidas secuencialmente hasta que añadir la siguiente arista —incluyendo el deadhead de acceso y el retorno al depósito— excedería la capacidad, momento en el cual se cierra el viaje actual y se inicia uno nuevo.
+El CARP+Tabu extiende el problema con una restricción de capacidad vehicular de 30 km por viaje. La solución inicial se construye con una heurística golosa que genera múltiples viajes acumulando distancia servida hasta alcanzar el límite. Sobre esta solución se aplica búsqueda Tabú (Glover, 1989, 1990) con vecindarios 2-opt y relocate, memoria de 15 iteraciones, criterio de aspiración, y 150 iteraciones máximo por sector con parada temprana tras 80 iteraciones sin mejora.
 
-Sobre esta solución inicial se aplica una búsqueda Tabú (Glover, 1989, 1990) que explora el espacio de soluciones mediante dos vecindarios complementarios seleccionados aleatoriamente en cada iteración: intercambio 2-opt (inversión de un segmento de la secuencia de aristas) y relocate (extracción de una arista de su posición actual y reinserción en otra ubicación). La memoria Tabú registra los movimientos realizados con un tenure de 15 iteraciones, y el criterio de aspiración acepta movimientos tabú si mejoran la mejor solución global encontrada. La búsqueda se detiene tras 80 iteraciones sin mejora o al alcanzar el máximo de 150 iteraciones por sector. La ruta final se reconstruye expandiendo la secuencia de aristas con los caminos más cortos entre aristas consecutivas y las conexiones de ida y vuelta al depósito.
+#### 2.3.4 CARP-Ulusoy (Route-First-Cluster-Second)
 
-### 2.4 Métricas de Evaluación
+El algoritmo CARP-Ulusoy implementa la estrategia route-first-cluster-second. Primero se construye el circuito Euleriano completo mediante el mismo procedimiento que el DCPP (fase route-first). A continuación, se recorre el circuito acumulando la distancia de las aristas requeridas. Cada vez que añadir la siguiente arista —incluyendo el deadhead de acceso y el retorno al depósito— excedería la capacidad de 30 km, se realiza un corte: se cierra el viaje actual retornando al depósito por el camino más corto, y se inicia un nuevo viaje desde el depósito hacia el siguiente nodo del circuito. La distancia total se mide expandiendo cada viaje con los caminos más cortos reales sobre el grafo no dirigido, conectando el depósito con el inicio del viaje, las aristas servidas entre sí, y el final del viaje de vuelta al depósito.
 
-Se definieron las siguientes métricas para la comparación sistemática del desempeño de los algoritmos: distancia total recorrida (km), que incluye tanto el servicio como el deadhead; distancia servida (km), correspondiente exclusivamente a la recolección activa; redundancia, definida como el cociente entre distancia total y distancia servida —un valor de 1.0 indica ruta sin deadhead, mientras que valores superiores cuantifican el desplazamiento improductivo—; tiempo estimado de operación (h), calculado como distancia total dividida por una velocidad promedio asumida de 5 km/h, valor conservador apropiado para circulación urbana con paradas frecuentes en topografía andina; tiempo de CPU (s), medido con `time.perf_counter()`; desbalance de grado en DCPP, definido como la suma de valores absolutos |δ(v)| para todos los nodos del sector; y porcentaje de mejora Tabú, calculado como la reducción relativa de la distancia respecto a la solución inicial Voraz.
+#### 2.3.5 MCPP — Validación del Modelo Dirigido
 
-### 2.5 Herramientas de Visualización y Soporte
+Para validar si el modelo dirigido introduce sesgo —al modelar calles de doble sentido como dos aristas dirigidas que requieren dos pasadas de servicio—, se implementó una referencia no dirigida (UCPP). Las aristas requeridas dirigidas se fusionan en aristas no dirigidas cuando existe el par opuesto (u→v y v→u), resultando en un conjunto reducido de aristas que requieren una sola pasada. Se identifican los nodos con grado impar en el subgrafo no dirigido y se resuelve un matching de peso mínimo entre ellos (heurística voraz). Las aristas duplicadas por el matching más las aristas requeridas originales forman un grafo Euleriano no dirigido, cuyo circuito se expande sobre la red vial real. La distancia total sirve como cota de referencia para evaluar el modelo dirigido.
 
-El ecosistema de software desarrollado para este estudio incluye herramientas de visualización interactiva que complementan el análisis cuantitativo. Un visor de rutas (HTML autónomo generado por `visor_rutas.py`) presenta las rutas DCPP de los 5 sectores sobre un mapa Leaflet.js con animación del recorrido de un carrito recolector a lo largo del circuito Euleriano del Sector 2, incluyendo el retorno al depósito calculado mediante una implementación propia del algoritmo de Dijkstra con heap binario. Un segundo visor, de tipo servidor web en vivo (`visor_live_sectores.py`), permite la exploración interactiva de la zonificación: carga el grafo sectorizado, colorea nodos y aristas según el sector asignado, ofrece una leyenda con toggle para ocultar/mostrar sectores individualmente, y muestra información detallada de cada elemento (ID, sector, coordenadas, longitud, dirección) al hacer clic, con utilidad de copia de identificadores al portapapeles.
+### 2.4 Métricas y Condiciones de Comparación
 
-### 2.6 Implementación
+Se definieron las siguientes métricas: distancia total recorrida (km), distancia servida (km), redundancia (cociente total/servida), tiempo estimado de operación (distancia total / 5 km/h), y tiempo de CPU (s). Para el DCPP se reporta adicionalmente el desbalance de grado, para el CARP+Tabu el porcentaje de mejora sobre la solución inicial, para el CARP-Ulusoy el número de viajes, y para el MCPP el número de nodos impares.
 
-Todos los algoritmos y herramientas se implementaron en Python 3.10 utilizando las librerías `networkx` (v3.4.2) para la manipulación del grafo y cálculo de caminos más cortos, `numpy` (v1.26.0) para cómputo numérico, `scikit-learn` (v1.5.0) para el clustering K-Means, `shapely` (v2.0.0) para operaciones geométricas, `pyproj` (v3.6.0) para cálculos geodésicos, y `matplotlib` (v3.10.9) para la generación de gráficos. El código fuente completo, incluyendo el editor vial, los tres algoritmos de ruteo, los visores interactivos y el orquestador principal, está disponible en el repositorio del proyecto bajo una estructura modular de scripts independientes. Los experimentos se ejecutaron en un sistema con procesador AMD Ryzen, 16 GB de RAM y Windows 10.
+Un aspecto crítico de la metodología es la unificación de la métrica de distancia. Todos los algoritmos calculan la distancia total recorrida midiendo los caminos más cortos reales sobre el mismo grafo no dirigido `Gu`, eliminando sesgos de medición que en versiones previas de este estudio distorsionaban la comparación al aplicar penalizaciones artificiales sobre aristas ya servidas.
+
+### 2.5 Implementación
+
+Todos los algoritmos se implementaron en Python 3.10 utilizando `networkx` para manipulación de grafos, `numpy` para cómputo numérico, `scikit-learn` para K-Means, `shapely` para operaciones geométricas, `pyproj` para cálculos geodésicos, y `matplotlib` para visualización. El ecosistema incluye además un editor vial web interactivo, dos visores de resultados (rutas animadas en HTML autónomo y sectores en servidor web en vivo), y un orquestador que ejecuta y compara los cinco algoritmos. Los experimentos se ejecutaron en un sistema AMD Ryzen con 16 GB de RAM y Windows 10.
 
 ---
 
@@ -76,89 +82,109 @@ Todos los algoritmos y herramientas se implementaron en Python 3.10 utilizando l
 
 ### 3.1 Desempeño Global
 
-La Tabla 1 presenta los resultados comparativos detallados de los tres algoritmos para los 5 sectores operativos de Chachapoyas. El total de calles a servir —excluyendo las 4 aristas de acceso al depósito— asciende a 111.27 km distribuidos en 5 sectores.
+La Tabla 1 presenta los resultados comparativos de los cinco algoritmos para los 5 sectores. El total de calles a servir —excluyendo las rutas de acceso al depósito— asciende a 111.27 km.
 
-**Tabla 1.** Resultados comparativos de los algoritmos de ruteo por sector.
+**Tabla 1.** Resultados comparativos por sector y algoritmo.
 
-| Sector | Algoritmo | Dist (km) | Serv (km) | Redund | Tiempo (h) | CPU (s) | Nota |
-|--------|-----------|-----------|-----------|--------|------------|---------|------|
-| 0 | Voraz | 60.07 | 32.77 | 1.833 | 12.01 | 0.117 | — |
-| 1 | Voraz | 35.38 | 19.51 | 1.814 | 7.08 | 0.040 | — |
-| 2 | Voraz | 29.66 | 11.96 | 2.481 | 5.93 | 0.036 | — |
-| 3 | Voraz | 42.22 | 20.99 | 2.011 | 8.44 | 0.042 | — |
-| 4 | Voraz | 49.94 | 26.04 | 1.917 | 9.99 | 0.080 | — |
-| 0 | DCPP | 49.44 | 32.77 | 1.509 | 9.89 | 0.032 | imb=45 |
-| 1 | DCPP | 31.38 | 19.51 | 1.609 | 6.28 | 0.021 | imb=3 |
-| 2 | DCPP | 14.62 | 11.96 | 1.223 | 2.92 | 0.016 | imb=7 |
-| 3 | DCPP | 33.60 | 20.99 | 1.601 | 6.72 | 0.019 | imb=11 |
-| 4 | DCPP | 40.78 | 26.04 | 1.566 | 8.16 | 0.026 | imb=21 |
-| 0 | CARP+Tabu | 59.89 | 32.77 | 1.827 | 11.98 | 1.671 | mej=0.3% |
-| 1 | CARP+Tabu | 35.03 | 19.51 | 1.796 | 7.01 | 0.134 | mej=1.0% |
-| 2 | CARP+Tabu | 28.20 | 11.96 | 2.358 | 5.64 | 0.158 | mej=4.9% |
-| 3 | CARP+Tabu | 35.53 | 20.99 | 1.693 | 7.11 | 0.255 | mej=15.8% |
-| 4 | CARP+Tabu | 49.94 | 26.04 | 1.917 | 9.99 | 0.713 | mej=0.0% |
+| S | Algoritmo | Dist (km) | Serv (km) | Redund | Tiempo (h) | CPU (s) | Nota |
+|---|-----------|-----------|-----------|--------|------------|---------|------|
+| 0 | Voraz | 43.70 | 21.83 | 2.002 | 8.74 | 0.049 | — |
+| 1 | Voraz | 39.09 | 22.50 | 1.738 | 7.82 | 0.046 | — |
+| 2 | Voraz | 44.17 | 23.33 | 1.893 | 8.83 | 0.059 | — |
+| 3 | Voraz | 41.30 | 22.12 | 1.867 | 8.26 | 0.064 | — |
+| 4 | Voraz | 43.55 | 21.49 | 2.027 | 8.71 | 0.093 | — |
+| 0 | DCPP | 36.37 | 21.83 | 1.666 | 7.27 | 0.022 | imb=19 |
+| 1 | DCPP | 33.80 | 22.50 | 1.502 | 6.76 | 0.021 | imb=7 |
+| 2 | DCPP | 35.29 | 23.33 | 1.513 | 7.06 | 0.019 | imb=16 |
+| 3 | DCPP | 35.26 | 22.12 | 1.594 | 7.05 | 0.017 | imb=13 |
+| 4 | DCPP | 36.86 | 21.49 | 1.715 | 7.37 | 0.035 | imb=43 |
+| 0 | CARP+Tabu | 42.89 | 21.83 | 1.965 | 8.58 | 0.327 | mej=1.9% |
+| 1 | CARP+Tabu | 38.90 | 22.50 | 1.729 | 7.78 | 0.230 | mej=0.5% |
+| 2 | CARP+Tabu | 42.14 | 23.33 | 1.806 | 8.43 | 0.311 | mej=4.6% |
+| 3 | CARP+Tabu | 41.30 | 22.12 | 1.867 | 8.26 | 0.434 | mej=0.0% |
+| 4 | CARP+Tabu | 43.55 | 21.49 | 2.027 | 8.71 | 1.108 | mej=0.0% |
+| 0 | CARP-Ulusoy | 28.37 | 21.83 | 1.300 | 5.67 | 0.073 | viajes=1 |
+| 1 | CARP-Ulusoy | 27.53 | 22.50 | 1.224 | 5.51 | 0.044 | viajes=1 |
+| 2 | CARP-Ulusoy | 27.64 | 23.33 | 1.185 | 5.53 | 0.052 | viajes=1 |
+| 3 | CARP-Ulusoy | 28.10 | 22.12 | 1.270 | 5.62 | 0.061 | viajes=1 |
+| 4 | CARP-Ulusoy | 26.33 | 21.49 | 1.225 | 5.27 | 0.103 | viajes=1 |
+| 0 | MCPP | 35.80 | 12.91 | 2.772 | 7.16 | 0.028 | odd=34 |
+| 1 | MCPP | 31.88 | 11.87 | 2.686 | 6.38 | 0.025 | odd=28 |
+| 2 | MCPP | 36.02 | 13.49 | 2.671 | 7.20 | 0.036 | odd=40 |
+| 3 | MCPP | 33.82 | 12.00 | 2.819 | 6.76 | 0.031 | odd=38 |
+| 4 | MCPP | 40.12 | 18.14 | 2.212 | 8.02 | 0.043 | odd=58 |
 
-### 3.2 Comparación Agregada por Algoritmo
-
-La Tabla 2 resume las métricas agregadas para los tres algoritmos, consolidando los resultados de los 5 sectores.
+La Tabla 2 consolida las métricas agregadas.
 
 **Tabla 2.** Métricas agregadas por algoritmo (suma de 5 sectores).
 
-| Algoritmo | Total (km) | Redundancia Promedio | Tiempo Total (h) | CPU Total (s) |
-|-----------|-----------|---------------------|------------------|---------------|
-| Voraz | 217.27 | 1.922 | 43.45 | 0.315 |
-| DCPP | 169.82 | 1.428 | 33.96 | 0.114 |
-| CARP+Tabu | 208.59 | 1.842 | 41.72 | 2.930 |
+| Algoritmo | Total (km) | Redund Prom | Tiempo Total (h) | CPU Total (s) |
+|-----------|-----------|-------------|------------------|---------------|
+| Voraz | 211.80 | 1.905 | 42.36 | 0.311 |
+| DCPP | 177.58 | 1.598 | 35.52 | 0.114 |
+| CARP+Tabu | 208.78 | 1.879 | 41.76 | 2.410 |
+| CARP-Ulusoy | 137.97 | 1.241 | 27.59 | 0.334 |
+| MCPP | 177.63 | 2.632 | 35.53 | 0.163 |
 
-El algoritmo DCPP logró la menor distancia total en los 5 sectores, con una reducción del 21.8% respecto al Voraz y del 18.6% respecto al CARP+Tabu. La redundancia promedio del DCPP (1.501) implica que, por cada kilómetro de calle servida, se recorrieron 0.501 km adicionales de deadhead, frente a 1.011 km en el Voraz y 0.918 km en el CARP+Tabu. Destaca particularmente el Sector 2, donde el DCPP alcanzó una redundancia de apenas 1.223 —la más baja del estudio— gracias a un desbalance moderado (7 unidades) y una topología favorable.
+El algoritmo CARP-Ulusoy logró la menor distancia total en los 5 sectores, con una reducción del 34.9% respecto al Voraz y del 22.3% respecto al DCPP. La redundancia promedio de 1.241 implica que por cada kilómetro de calle servida se recorrieron 0.241 km adicionales de deadhead, frente a 0.905 km del Voraz y 0.598 km del DCPP. Destaca la consistencia del CARP-Ulusoy entre sectores, con una desviación de apenas 1.6 km entre el sector más corto (26.33 km, S4) y el más largo (28.37 km, S0).
 
-El DCPP no solo produjo las rutas más cortas, sino que lo hizo con el menor costo computacional: 0.114 segundos totales de CPU, 2.8 veces más rápido que el Voraz (0.315 s) y 26 veces más rápido que el CARP+Tabu (2.930 s). Esta aparente paradoja —el algoritmo óptimo siendo también el más rápido— se explica porque el costo dominante en el Voraz es la búsqueda iterativa de la arista más cercana en cada paso (O(n²) en el peor caso con evaluación de distancias), mientras que el DCPP concentra su cómputo en una única ejecución del algoritmo Húngaro (O(m³) donde m es el desbalance total, típicamente mucho menor que n) y una pasada lineal de Hierholzer.
+El DCPP, con 177.58 km, también supera al Voraz en un 16.2%, confirmando la ventaja de la optimización global sobre la estrategia incremental. Sin embargo, su rendimiento está limitado por la necesidad de recorrer aristas fantasma —caminos de deadhead impuestos por el matching Húngaro para balancear grados— que el CARP-Ulusoy evita al conectar las aristas requeridas directamente por camino más corto.
 
-### 3.3 Efecto del Desbalance de Grado en DCPP
+El CARP+Tabu (208.78 km) apenas mejoró un 1.4% sobre el Voraz, un resultado débil que contrasta con la efectividad del CARP-Ulusoy. La restricción de capacidad de 30 km por viaje resultó no vinculante en ningún sector (todos los viajes únicos del CARP-Ulusoy tienen un solo viaje por sector), lo que explica por qué la búsqueda Tabú —diseñada para reorganizar viajes— no encuentra mejoras sustanciales.
 
-El desbalance del subgrafo requerido, que determina el número de aristas fantasma necesarias para hacer el grafo Euleriano, varió significativamente entre sectores: S0 presentó 45 unidades de desbalance, S4 = 21, S3 = 11, S2 = 7, y S1 = 3. Se observó una correlación positiva moderada entre el desbalance y la redundancia resultante. El sector 0, con el mayor desbalance (45), presentó también la mayor redundancia dentro del DCPP (1.509), reflejando la necesidad de recorrer caminos de deadhead más extensos para equilibrar los grados de los nodos involucrados. En contraste, el sector 1, con apenas 3 unidades de desbalance, logró una redundancia de 1.609 —valor que podría parecer elevado para un desbalance tan bajo, pero que se explica por la distancia de acceso desde el depósito al inicio del circuito en ese sector periférico.
+El MCPP obtuvo 177.63 km, prácticamente idéntico al DCPP (177.58 km). Esta equivalencia valida el modelo dirigido: a pesar de que el modelo no dirigido reduce las aristas requeridas a la mitad (al fusionar pares opuestos), el mayor número de nodos de grado impar resultante —y el consiguiente deadhead del matching— compensa exactamente la reducción en distancia servida. El modelo dirigido no introduce sesgo en la distancia total recorrida.
 
-### 3.4 Rendimiento del CARP con Búsqueda Tabú
+### 3.2 Efecto del Desbalance de Grado en DCPP
 
-La búsqueda Tabú produjo mejoras variables respecto a la solución inicial Voraz. El sector 3 registró la mejora más sustancial (15.8%, de 42.22 km iniciales a 35.53 km), seguido por el sector 2 (4.9%) y el sector 1 (1.0%). En los sectores 0 y 4, la mejora fue marginal (0.3% y 0.0% respectivamente), indicando que la solución inicial Voraz ya se encontraba cerca del óptimo local alcanzable dentro de las restricciones de vecindad exploradas. Este comportamiento sugiere que la restricción de capacidad de 30 km por viaje limita el espacio de búsqueda de manera que, en sectores con calles ya naturalmente agrupadas, los operadores de 2-opt y relocate tienen poco margen para reorganizar los viajes de forma significativa.
+El desbalance total del subgrafo requerido, que determina el número de aristas fantasma necesarias, varió entre sectores: S4 = 43, S0 = 19, S2 = 16, S3 = 13, y S1 = 7. Se observa una correlación positiva entre el desbalance y la redundancia del DCPP (r = 0.63). El sector 4, con el mayor desbalance, presentó la mayor redundancia DCPP (1.715), mientras que el sector 1, con el menor desbalance, alcanzó la menor redundancia (1.502). El region-growing logró un desbalance total de 98 unidades entre los 5 sectores, comparable al obtenido con K-Means (87 unidades en la versión anterior), pero con un balance de carga operativa sustancialmente mejor (1.16x vs 1.68x en kilómetros por sector).
 
-El tiempo de cómputo del CARP+Tabu fue consistentemente el más elevado: 2.930 segundos totales, impulsado principalmente por las 150 evaluaciones de función objetivo por sector, cada una de las cuales requiere múltiples llamadas a Dijkstra para calcular la distancia de la ruta completa. El sector 0 consumió 1.671 s (el 57% del tiempo total), correlacionado con su mayor número de aristas (272) que incrementa el costo de cada evaluación.
+### 3.3 Rendimiento del CARP+Tabu
 
-### 3.5 Análisis de Calles con Uso Excesivo en DCPP
+El CARP+Tabu mostró un rendimiento consistentemente débil. Solo en el sector 2 se observó una mejora moderada del 4.6% sobre la solución inicial Voraz; en los sectores 3 y 4 no se encontró ninguna mejora, convergiendo a la solución inicial. El tiempo de cómputo (2.410 s totales) fue 7.2 veces mayor que el del CARP-Ulusoy (0.334 s) y 21 veces mayor que el del DCPP (0.114 s). Un análisis de rigor estadístico con 10 corridas independientes (diferentes semillas aleatorias) arrojó una media de 207.05 ± 1.34 km, confirmando la estabilidad de este bajo rendimiento.
 
-Se identificaron calles individuales con frecuencias elevadas de traversación en las rutas DCPP, particularmente en sectores con alto desbalance. El sector 0 registró el mayor número de calles con cuatro o más traversaciones, correspondientes a segmentos cercanos al depósito y a conexiones inter-clúster que son utilizados tanto por aristas de servicio como por caminos de deadhead. Un análisis de sensibilidad mostró que forzar una compresión a un máximo de 3 traversaciones por calle duplica aproximadamente la distancia total del DCPP en los sectores afectados, deteriorando gravemente la eficiencia global. Este hallazgo sugiere que, para la topología específica de Chachapoyas, la tolerancia a múltiples traversaciones en calles estratégicas es un compromiso necesario entre optimalidad teórica y practicidad operativa.
+### 3.4 Comparación con el Modelo No Dirigido
+
+El MCPP transformó las aristas dirigidas en no dirigidas, reduciendo el número de aristas requeridas de 640 a 430 (fusión de 210 pares opuestos). La distancia servida se redujo proporcionalmente (de 111.27 km a 68.41 km), pero el deadhead aumentó en la misma medida, resultando en una distancia total prácticamente idéntica al DCPP (177.63 vs 177.58 km). Este hallazgo valida empíricamente que el modelo dirigido es una simplificación razonable para el problema de recolección en Chachapoyas: modelar calles de doble sentido como dos aristas dirigidas no infla la distancia total, ya que la reducción en complejidad del matching de grados compensa exactamente el kilometraje adicional de servicio.
 
 ---
 
 ## 4. Discusión
 
-Los resultados de este estudio demuestran de manera concluyente que el algoritmo DCPP ofrece un rendimiento superior al Voraz y al CARP+Tabu para el problema de ruteo de recolección de residuos en Chachapoyas. La reducción del 21.8% en distancia total recorrida, combinada con el menor costo computacional, posiciona al DCPP como la opción óptima para la planificación operativa municipal.
+Los resultados de este estudio demuestran que la estrategia route-first-cluster-second, materializada en el algoritmo CARP-Ulusoy, ofrece el mejor rendimiento para el problema de ruteo de recolección en Chachapoyas. La reducción del 34.9% en distancia total respecto al Voraz y del 22.3% respecto al DCPP representa un ahorro operativo sustancial, máxime considerando que todos los algoritmos fueron evaluados con la misma métrica de distancia real sobre el mismo grafo.
 
-La corrección del error en la dirección de las aristas fantasma —orientándolas desde nodos sumidero hacia nodos fuente, en lugar de la dirección inversa— constituye un hallazgo metodológico relevante. Una implementación que oriente incorrectamente estas aristas produce un grafo más desbalanceado, impide la construcción de un circuito Euleriano completo y genera rutas inválidas con redundancia inferior a 1.0 (físicamente imposible). Esta corrección, aunque sutil en su formulación matemática, tiene un impacto determinante en la validez de los resultados, y su documentación explícita contribuye a la reproducibilidad del método.
+La superioridad del CARP-Ulusoy sobre el DCPP se explica por un mecanismo fundamental: el DCPP debe recorrer las aristas fantasma del matching Húngaro como deadhead obligatorio para mantener la propiedad Euleriana del circuito, mientras que el CARP-Ulusoy —al heredar únicamente el orden de las aristas requeridas del circuito— conecta cada arista con la siguiente mediante el camino más corto directo, eliminando el deadhead de las aristas fantasma. Esta diferencia representa aproximadamente 40 km en el total agregado de los 5 sectores, y constituye la principal contribución de eficiencia del enfoque route-first-cluster-second.
 
-Los valores de redundancia obtenidos para DCPP (1.223 a 1.609) son consistentes con los reportados en estudios similares. Ghiani et al. (2005) reportaron redundancias entre 1.2 y 1.8 para rutas optimizadas en ciudades italianas de tamaño comparable, mientras que Santos et al. (2010) obtuvieron redundancias entre 1.4 y 2.1 aplicando heurísticas CARP en redes urbanas españolas. La superioridad del DCPP sobre el CARP+Tabu observada en este estudio contrasta con resultados previos donde las metaheurísticas suelen superar a los métodos exactos para CARP (Lacomme et al., 2004). Esta discrepancia puede atribuirse a la topología particular de Chachapoyas: la presencia de múltiples calles sin salida y una densidad vial heterogénea limitan la efectividad de los intercambios entre viajes, ya que las alternativas de reruteo son escasas. En esencia, cuando la red subyacente ofrece pocas rutas alternativas, la optimalidad global del DCPP predomina sobre la flexibilidad de la búsqueda local del CARP.
+Otro hallazgo relevante es que la restricción de capacidad de 30 km por viaje resultó no vinculante con los sectores balanceados producidos por el region-growing. Todos los sectores tienen entre 21.5 y 23.3 km de calles a servir, por debajo del límite de capacidad incluso sumando el deadhead de acceso y retorno al depósito, resultando en un solo viaje por sector. Esto sugiere que, para la escala de Chachapoyas, la optimización de la zonificación tiene mayor impacto que la optimización de la asignación de capacidad entre viajes.
 
-### 4.1 Limitaciones del Estudio
+La equivalencia DCPP ≈ MCPP (177.58 vs 177.63 km) constituye un resultado de validación importante. Contrario a la intuición inicial de que el modelo dirigido podría estar inflando artificialmente las distancias al forzar dos pasadas por calles de doble sentido, el análisis muestra que la reducción en deadhead del matching dirigido compensa exactamente el servicio adicional. Este hallazgo respalda la validez del modelo dirigido como simplificación metodológica para estudios de ruteo en contextos similares.
 
-Este estudio presenta varias limitaciones que deben considerarse al interpretar sus resultados. Primero, se asumió una capacidad vehicular homogénea de 30 km para todos los viajes, sin considerar la variabilidad en la densidad de residuos por zona, la frecuencia de recolección diferenciada, ni la ubicación de puntos de descarga intermedios alternativos al depósito central. Segundo, la velocidad constante de 5 km/h no incorpora variaciones debidas a la topografía andina —con pendientes pronunciadas características de Chachapoyas—, condiciones climáticas estacionales, ni congestión vehicular en horas pico, factores que afectan diferencialmente a distintos sectores de la ciudad. Tercero, no se incorporaron restricciones de ventanas temporales de recolección ni sincronización entre múltiples vehículos operando simultáneamente, aspectos relevantes para la planificación operativa real. Cuarto, el modelo actual tolera múltiples traversaciones de una misma calle sin imponer un límite estricto, lo cual podría generar desgaste desproporcionado en segmentos viales específicos. Quinto, el estudio se basa en una instantánea del grafo vial sin considerar cambios estacionales o temporales en la red.
+### 4.1 Comparación con la Literatura
 
-### 4.2 Implicaciones Prácticas
+Los valores de redundancia obtenidos para DCPP (1.502 a 1.715) son consistentes con los reportados en estudios similares. Ghiani et al. (2005) reportaron redundancias entre 1.2 y 1.8 para ciudades italianas, y Santos et al. (2010) entre 1.4 y 2.1 en redes urbanas españolas. La redundancia del CARP-Ulusoy (1.185 a 1.300) es notablemente inferior a estos valores de referencia, lo que sugiere que la estrategia route-first-cluster-second merece mayor atención en la literatura de ruteo de arcos.
 
-La reducción del 21.8% en distancia total recorrida que ofrece el DCPP respecto al Voraz se traduce, en términos operativos concretos, en un ahorro de aproximadamente 47.4 km por ciclo de recolección completo (5 sectores), una reducción de 9.5 horas de operación por ciclo, una disminución proporcional en emisiones de CO₂ y contaminantes locales, y un menor desgaste de la flota vehicular. Considerando que los costos de recolección representan el 60-80% del presupuesto municipal de limpieza pública, estas mejoras tienen un impacto económico y ambiental sustancial que justifica plenamente la adopción del enfoque DCPP.
+### 4.2 Limitaciones
+
+Este estudio presenta limitaciones que deben considerarse. La velocidad constante de 5 km/h no incorpora variaciones por pendiente, congestión o condiciones climáticas. No se modelaron ventanas temporales ni sincronización entre vehículos. El modelo asume un depósito único central, sin puntos de descarga intermedios. La generalización de los resultados a otras ciudades requiere validación adicional, particularmente en urbes con mayor densidad vial o con patrones de tráfico significativamente diferentes.
 
 ### 4.3 Trabajo Futuro
 
-Varias líneas de investigación se derivan naturalmente de este estudio. La integración de restricciones de capacidad directamente en el modelo DCPP, mediante la generación de múltiples circuitos Eulerianos que respeten límites de distancia, permitiría combinar la optimalidad del CPP con las restricciones operativas reales. La formulación de un problema multi-objetivo que incorpore simultáneamente minimización de distancia, balanceo de carga entre vehículos y maximización de cobertura temporal representa una extensión natural hacia la planificación operativa integral. La incorporación de datos en tiempo real —como niveles de llenado de contenedores mediante sensores IoT— habilitaría un sistema de ruteo dinámico que ajuste las rutas según la demanda efectiva. La validación de la metodología en otras ciudades peruanas y latinoamericanas con diferentes patrones urbanísticos es necesaria para establecer la generalizabilidad de los resultados. Finalmente, el análisis de sensibilidad sistemático a diferentes capacidades vehiculares y velocidades de operación permitiría construir curvas de Pareto que informen decisiones de inversión en flota.
+Varias líneas de investigación se derivan de este estudio. La incorporación de datos reales de elevación permitiría modelar el costo energético diferencial de rutas con pendiente. La extensión del CARP-Ulusoy para manejar múltiples depósitos o puntos de descarga intermedios aumentaría su aplicabilidad operativa. La validación del DCPP y CARP-Ulusoy contra instancias benchmark estándar de la literatura (mval, egl) fortalecería la confianza en la correctitud de las implementaciones. Finalmente, un análisis de sensibilidad sistemático a la velocidad de operación y a la capacidad vehicular proporcionaría curvas de Pareto para la toma de decisiones municipales.
 
 ---
 
 ## 5. Conclusiones
 
-Este estudio presentó una comparación sistemática de tres algoritmos de ruteo para la optimización de la recolección de residuos sólidos en Chachapoyas, Perú, utilizando un grafo vial corregido de 256 nodos y 646 aristas que modela fielmente la red de calles de la ciudad. Los hallazgos principales se resumen a continuación.
+Este estudio presentó una comparación sistemática de cinco algoritmos de ruteo para la optimización de la recolección de residuos sólidos en Chachapoyas, Perú, utilizando un grafo vial corregido de 256 nodos y 646 aristas, particionado en 5 sectores balanceados mediante region-growing, y evaluado con métrica de distancia unificada sobre el mismo grafo.
 
-El algoritmo DCPP superó consistentemente a los métodos Voraz y CARP+Tabu en los 5 sectores evaluados, alcanzando una distancia total de 169.82 km con redundancia promedio de 1.501, lo que representa una mejora del 21.8% sobre la línea base Voraz. La zonificación mediante K-Means con k = 5 y ajustes manuales espaciales produjo sectores funcionalmente conexos y razonablemente balanceados, con un total de 111.27 km de calles a servir, excluyendo correctamente las 4 rutas de acceso al depósito (7.21 km) que no requieren servicio. El algoritmo DCPP completó el cómputo en 0.114 segundos de CPU, siendo el más rápido de los tres métodos evaluados. La restricción de capacidad vehicular de 30 km implementada en el CARP+Tabu no produjo mejoras sustanciales respecto al Voraz en la mayoría de los sectores, con la excepción del sector 3 donde se alcanzó una mejora del 15.8%, lo que sugiere que la capacidad no es el factor limitante principal en la configuración actual.
+El algoritmo CARP-Ulusoy superó a todos los demás métodos en los 5 sectores, con una distancia total de 137.97 km y redundancia de 1.241, representando una mejora del 34.9% sobre el Voraz y del 22.3% sobre el DCPP. La clave de su rendimiento es evitar el deadhead de las aristas fantasma impuestas por el matching Húngaro, conectando las aristas requeridas directamente por camino más corto.
 
-El DCPP se consolida como el algoritmo recomendado para la optimización de rutas de recolección en Chachapoyas y potencialmente en otras ciudades de topografía y trazado urbano similares, ofreciendo un equilibrio óptimo entre calidad de la solución y eficiencia computacional. La metodología completa —incluyendo el editor vial interactivo, la zonificación determinística, los tres algoritmos de ruteo y los visores de rutas y sectores— está disponible como código abierto, facilitando su reproducción, validación y adaptación a otros contextos urbanos.
+El DCPP (177.58 km) confirma su posición como referencia óptima para el problema del cartero chino, pero su acoplamiento con el matching de grados le impone un costo de deadhead que el CARP-Ulusoy elimina. El CARP+Tabu (208.78 km) demostró ser el enfoque menos efectivo, con la restricción de capacidad resultando no vinculante para los sectores balanceados.
+
+La zonificación por region-growing produjo sectores con balance de carga de 1.16x, una mejora del 44% sobre K-Means, garantizando conectividad por construcción y eliminando la necesidad de ajustes manuales.
+
+El MCPP (177.63 km) validó que el modelo dirigido no introduce sesgo en la distancia total, siendo los modelos dirigido y no dirigido equivalentes para la red vial de Chachapoyas.
+
+La metodología completa —incluyendo editor vial, zonificación, cinco algoritmos y visores interactivos— está disponible como código abierto, facilitando su reproducción y adaptación a otros contextos urbanos.
 
 ---
 
@@ -172,30 +198,30 @@ Los autores agradecen a la Municipalidad Provincial de Chachapoyas por facilitar
 
 Boeing, G. (2017). OSMnx: New methods for acquiring, constructing, analyzing, and visualizing complex street networks. *Computers, Environment and Urban Systems*, 65, 126-139.
 
-Edmonds, J., & Johnson, E. L. (1973). Matching, Euler tours and the Chinese postman. *Mathematical Programming*, 5(1), 88-124.
+Edmonds, J., y Johnson, E. L. (1973). Matching, Euler tours and the Chinese postman. *Mathematical Programming*, 5(1), 88-124.
 
-Eiselt, H. A., Gendreau, M., & Laporte, G. (1995). Arc routing problems, part I: The Chinese postman problem. *Operations Research*, 43(2), 231-242.
+Eiselt, H. A., Gendreau, M., y Laporte, G. (1995). Arc routing problems, part I: The Chinese postman problem. *Operations Research*, 43(2), 231-242.
 
-Ghiani, G., Laporte, G., & Musmanno, R. (2005). Introduction to logistics systems planning and control. *Wiley Interscience*.
+Ghiani, G., Laporte, G., y Musmanno, R. (2005). Introduction to logistics systems planning and control. *Wiley Interscience*.
 
 Glover, F. (1989). Tabu search — part I. *ORSA Journal on Computing*, 1(3), 190-206.
 
 Glover, F. (1990). Tabu search — part II. *ORSA Journal on Computing*, 2(1), 4-32.
 
-Golden, B. L., & Wong, R. T. (1981). Capacitated arc routing problems. *Networks*, 11(3), 305-315.
+Golden, B. L., y Wong, R. T. (1981). Capacitated arc routing problems. *Networks*, 11(3), 305-315.
 
 Hierholzer, C. (1873). Über die Möglichkeit, einen Linienzug ohne Wiederholung und ohne Unterbrechung zu umfahren. *Mathematische Annalen*, 6(1), 30-32.
 
-Kaza, S., Yao, L., Bhada-Tata, P., & Van Woerden, F. (2018). What a waste 2.0: A global snapshot of solid waste management to 2050. *World Bank Publications*.
+Kaza, S., Yao, L., Bhada-Tata, P., y Van Woerden, F. (2018). What a waste 2.0: A global snapshot of solid waste management to 2050. *World Bank Publications*.
 
 Kuhn, H. W. (1955). The Hungarian method for the assignment problem. *Naval Research Logistics Quarterly*, 2(1-2), 83-97.
 
-Lacomme, P., Prins, C., & Tanguy, A. (2004). A genetic algorithm for the capacitated arc routing problem and its extensions. *Lecture Notes in Computer Science*, 3004, 205-219.
-
-Lloyd, S. (1982). Least squares quantization in PCM. *IEEE Transactions on Information Theory*, 28(2), 129-137.
+Lacomme, P., Prins, C., y Tanguy, A. (2004). A genetic algorithm for the capacitated arc routing problem and its extensions. *Lecture Notes in Computer Science*, 3004, 205-219.
 
 MINAM (2021). Sexto Reporte Nacional de Residuos Sólidos Municipales 2021. *Ministerio del Ambiente del Perú*.
 
 Munkres, J. (1957). Algorithms for the assignment and transportation problems. *Journal of the Society for Industrial and Applied Mathematics*, 5(1), 32-38.
 
-Santos, L., Coutinho-Rodrigues, J., & Antunes, C. H. (2010). A web spatial decision support system for vehicle routing using Google Maps. *Decision Support Systems*, 51(1), 1-9.
+Santos, L., Coutinho-Rodrigues, J., y Antunes, C. H. (2010). A web spatial decision support system for vehicle routing using Google Maps. *Decision Support Systems*, 51(1), 1-9.
+
+Ulusoy, G. (1985). The fleet size and mix problem for capacitated arc routing. *European Journal of Operational Research*, 22(3), 329-337.

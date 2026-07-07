@@ -170,7 +170,7 @@ def main_detailed():
     elif algo == "ulusoy":
         r = carp_ulusoy(sector)
     else:
-        print("Algoritno invalido")
+        print("Algoritmo invalido")
         return
 
     print(f"\n{'='*60}")
