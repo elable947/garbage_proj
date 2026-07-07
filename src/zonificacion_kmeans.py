@@ -21,6 +21,14 @@ RANDOM_STATE = 42
 EXCLUDED_NODES = {
     "af3202cd-3a9f-4a98-bdd0-28e64cac4795",
     "ebde992d-a470-4566-a4b9-3830567e8f78",
+    "5430646999",
+    "635223275",
+}
+
+EXCLUDED_EDGES = {
+    "d82847bd-8dff-47ef-aad7-212a4d8aea52",
+    "81ceeece-6c08-4bd3-9d47-1deca6a3941b",
+    "f25eb237-f2ed-49e4-85d7-0f0ac12326f2",
 }
 
 
@@ -57,7 +65,8 @@ def main():
     nnodes = G.number_of_nodes()
     nedges = G.number_of_edges()
     print(f"Grafo cargado: {nnodes} nodos, {nedges} aristas")
-    print(f"Nodos a excluir despues del clustering: {EXCLUDED_NODES}")
+    print(f"Nodos excluidos: {EXCLUDED_NODES}")
+    print(f"Aristas excluidas (ruta al deposito): {EXCLUDED_EDGES}")
 
     # ── 2. Coordinates (ALL nodes, track excluded indices) ──────────
     coords = []
@@ -311,8 +320,9 @@ def main():
             "sectores": {n: int(G.nodes[n].get("sector", -1)) for n in G.nodes},
             "centroids": centroids.tolist(),
             "excluded": list(EXCLUDED_NODES),
+            "excluded_edges": list(EXCLUDED_EDGES),
         }, f, indent=2)
-    print(f"Exportado: data/sectores.json ({len(G.nodes)} nodos, {N_CLUSTERS} centroides)")
+    print(f"Exportado: data/sectores.json ({len(G.nodes)} nodos, {N_CLUSTERS} centroides, {len(EXCLUDED_EDGES)} aristas excluidas)")
 
     # ── 12. Export graphml ─────────────────────────────────────────
     for n in G.nodes:

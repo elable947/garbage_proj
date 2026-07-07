@@ -150,22 +150,22 @@ def dcpp(sector_id: int):
 
         m = len(src_list)
 
-        # Cache de distancias por nodo unico
+        # Cache de distancias desde sinks para encontrar caminos minimos a sources
         dist_cache = {}
-        for s in set(src_list):
-            dists, _ = nx.single_source_dijkstra(Gu, s, weight="length")
-            dist_cache[s] = dists
+        for t in set(snk_list):
+            dists, _ = nx.single_source_dijkstra(Gu, t, weight="length")
+            dist_cache[t] = dists
 
         cost_matrix = [[0.0] * m for _ in range(m)]
         for i in range(m):
-            dmap = dist_cache[src_list[i]]
+            dmap = dist_cache[snk_list[i]]
             for j in range(m):
-                cost_matrix[i][j] = dmap.get(snk_list[j], float("inf"))
+                cost_matrix[i][j] = dmap.get(src_list[j], float("inf"))
 
         min_cost, assignment = hungarian(cost_matrix)
 
         for i, j in enumerate(assignment):
-            phantom_edges.append((src_list[i], snk_list[j], cost_matrix[i][j]))
+            phantom_edges.append((snk_list[i], src_list[j], cost_matrix[i][j]))
 
     adj = defaultdict(list)
     for u, v, k in required:
@@ -194,6 +194,7 @@ def dcpp(sector_id: int):
             for key in Gu_penalty[u_pen][v_pen]:
                 Gu_penalty[u_pen][v_pen][key]["length"] *= 100.0
     expanded = [circuit[0]]
+    actual_circuit_dist = 0.0
     for i in range(len(circuit) - 1):
         a, b = circuit[i], circuit[i + 1]
         if (a, b) not in required_set:
@@ -205,9 +206,13 @@ def dcpp(sector_id: int):
                     sp = nx.shortest_path(Gu, a, b, weight="length")
                     expanded.extend(sp[1:])
                 except nx.NetworkXNoPath:
+                    sp = [a, b]
                     expanded.append(b)
+            actual_circuit_dist += nx.shortest_path_length(Gu, sp[0], sp[-1], weight="length")
         else:
             expanded.append(b)
+            k = next(iter(G[a][b]))
+            actual_circuit_dist += G.edges[a, b, k]["length"]
 
     path_to = nx.shortest_path(Gu, depot, circuit_start, weight="length")
     path_to_dist = nx.shortest_path_length(Gu, depot, circuit_start, weight="length")
@@ -220,7 +225,7 @@ def dcpp(sector_id: int):
     if circuit_end != depot:
         full_route.extend(path_from[1:])
 
-    total_dist = path_to_dist + total_phantom + total_serviced + path_from_dist
+    total_dist = path_to_dist + actual_circuit_dist + path_from_dist
 
     t1 = time.perf_counter()
 

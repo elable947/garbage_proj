@@ -86,11 +86,11 @@ snk_list = [n for n, q in sinks.items() for _ in range(q)]
 m = len(src_list)
 
 dist_cache = {}
-for s in set(src_list):
-    dists, _ = nx.single_source_dijkstra(Gu, s, weight="length")
-    dist_cache[s] = dists
+for t in set(snk_list):
+    dists, _ = nx.single_source_dijkstra(Gu, t, weight="length")
+    dist_cache[t] = dists
 
-cost_matrix = [[dist_cache[src_list[i]].get(snk_list[j], float("inf")) for j in range(m)] for i in range(m)]
+cost_matrix = [[dist_cache[snk_list[i]].get(src_list[j], float("inf")) for j in range(m)] for i in range(m)]
 _, assignment = hungarian(cost_matrix)
 
 # ── Circuito Euleriano expandido ──────────────────────────────
@@ -99,7 +99,7 @@ adj = defaultdict(list)
 for u, v, k in req:
     adj[u].append(v)
 for i, j in enumerate(assignment):
-    adj[src_list[i]].append(snk_list[j])
+    adj[snk_list[i]].append(src_list[j])
 
 depot_dists, _ = nx.single_source_dijkstra(Gu, depot, weight="length")
 circuit_start = min(adj, key=lambda n: depot_dists.get(n, float("inf")))
