@@ -211,33 +211,21 @@ def dcpp(sector_id: int):
     # Ensure start is closest to depot overall
     circuit_start = circuit[0]
 
-    # Expandir pasos phantom del circuito en caminos reales (solo para ruta nodos)
-    # Penalizar aristas ya servidas para evitar que el deadhead re-use la misma calle
+    # Expandir pasos phantom del circuito en caminos reales
     required_set = set()
-    required_undirected = set()
     for u, v, k in required:
         required_set.add((u, v))
-        required_undirected.add((min(u, v), max(u, v)))
-    Gu_penalty = Gu.copy()
-    for u_pen, v_pen in required_undirected:
-        if Gu_penalty.has_edge(u_pen, v_pen):
-            for key in Gu_penalty[u_pen][v_pen]:
-                Gu_penalty[u_pen][v_pen][key]["length"] *= 100.0
     expanded = [circuit[0]]
     actual_circuit_dist = 0.0
     for i in range(len(circuit) - 1):
         a, b = circuit[i], circuit[i + 1]
         if (a, b) not in required_set:
             try:
-                sp = nx.shortest_path(Gu_penalty, a, b, weight="length")
+                sp = nx.shortest_path(Gu, a, b, weight="length")
                 expanded.extend(sp[1:])
             except nx.NetworkXNoPath:
-                try:
-                    sp = nx.shortest_path(Gu, a, b, weight="length")
-                    expanded.extend(sp[1:])
-                except nx.NetworkXNoPath:
-                    sp = [a, b]
-                    expanded.append(b)
+                sp = [a, b]
+                expanded.append(b)
             actual_circuit_dist += nx.shortest_path_length(Gu, sp[0], sp[-1], weight="length")
         else:
             expanded.append(b)

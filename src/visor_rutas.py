@@ -106,29 +106,18 @@ circuit_start = min(adj, key=lambda n: depot_dists.get(n, float("inf")))
 circuit_raw = _hierholzer(adj, circuit_start)
 
 required_set = set()
-required_undirected = set()
 for u, v, k in req:
     required_set.add((u, v))
-    required_undirected.add((min(u, v), max(u, v)))
-Gu_penalty = Gu.copy()
-for u_pen, v_pen in required_undirected:
-    if Gu_penalty.has_edge(u_pen, v_pen):
-        for key in Gu_penalty[u_pen][v_pen]:
-            Gu_penalty[u_pen][v_pen][key]["length"] *= 100.0
 
 circuit_expanded = [circuit_raw[0]]
 for i in range(len(circuit_raw) - 1):
     a, b = circuit_raw[i], circuit_raw[i + 1]
     if (a, b) not in required_set:
         try:
-            sp = nx.shortest_path(Gu_penalty, a, b, weight="length")
+            sp = nx.shortest_path(Gu, a, b, weight="length")
             circuit_expanded.extend(sp[1:])
         except nx.NetworkXNoPath:
-            try:
-                sp = nx.shortest_path(Gu, a, b, weight="length")
-                circuit_expanded.extend(sp[1:])
-            except nx.NetworkXNoPath:
-                circuit_expanded.append(b)
+            circuit_expanded.append(b)
     else:
         circuit_expanded.append(b)
 
