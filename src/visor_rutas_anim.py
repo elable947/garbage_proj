@@ -43,10 +43,12 @@ edge_lookup = {}
 
 
 def _parse_geometry(val):
-    if not val or "LINESTRING" not in str(val):
+    if not val:
         return None
     try:
         if isinstance(val, str):
+            if "LINESTRING" not in val:
+                return None
             geom = wkt_module.loads(val)
         else:
             geom = val
@@ -60,21 +62,56 @@ def _node_ll(n):
 
 
 def _route_to_coords(nodes):
-    coords = []
-    for i in range(len(nodes)):
-        a = nodes[i]
-        if i == 0:
-            coords.append(_node_ll(a))
+    """Build coords from node sequence using edge geometries for curves."""
+    if not nodes:
+        return []
+    coords = [_node_ll(nodes[0])]
+    for i in range(len(nodes) - 1):
+        a, b = nodes[i], nodes[i + 1]
+        if a == b:
+            continue
+        geom = _edge_geom_direct(a, b)
+        if geom and len(geom) > 1:
+            for pt in geom[1:]:
+                coords.append(pt)
         else:
-            b = nodes[i]
-            geom = edge_lookup.get((a, b))
-            if geom:
-                for pt in geom[1:]:
-                    coords.append(pt)
-            else:
-                coords.append(_node_ll(b))
-            a = b
+            coords.append(_node_ll(b))
     return coords
+
+
+def _edge_geom_direct(a, b):
+    """Get (lat, lon) coords of the directed edge a->b from the graph geometry."""
+    if G.has_edge(a, b):
+        for k in G[a][b]:
+            val = G.edges[a, b, k].get("geometry")
+            pts = _parse_geometry(val)
+            if pts:
+                return pts
+    try:
+        sp = nx.shortest_path(Gu, a, b, weight="length")
+        pts = []
+        for i in range(len(sp) - 1):
+            u, v = sp[i], sp[i + 1]
+            seg_pts = _edge_geom_direct_segment(u, v)
+            if seg_pts:
+                for p in (seg_pts[1:] if i > 0 else seg_pts):
+                    pts.append(p)
+            else:
+                pts.append(_node_ll(v))
+        return pts
+    except nx.NetworkXNoPath:
+        return None
+
+
+def _edge_geom_direct_segment(u, v):
+    """Get geometry for a single edge segment u->v."""
+    if G.has_edge(u, v):
+        for k in G[u][v]:
+            val = G.edges[u, v, k].get("geometry")
+            pts = _parse_geometry(val)
+            if pts:
+                return pts
+    return None
 
 
 def _compute_return_path(end_node):
@@ -243,11 +280,12 @@ function updateBgRoutes() {
     delete bgLines[key];
   }
   for (const [skey, route] of Object.entries(allData)) {
-    const [s, algo] = skey.split(":"); 
-    const sid = parseInt(s);
-    if (sid === currentSector) continue;
+    const sid = parseInt(skey.split(":")[0]);
+    const isActive = (sid === currentSector);
     bgLines[skey] = L.polyline(route.coords, {
-      color: COLORS[sid], weight: 2, opacity: 0.3,
+      color: COLORS[sid],
+      weight: isActive ? 4 : 2,
+      opacity: isActive ? 0.6 : 0.25,
     }).addTo(map);
   }
 }
