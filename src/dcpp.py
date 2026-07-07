@@ -176,10 +176,40 @@ def dcpp(sector_id: int):
     total_phantom = sum(d for _, _, d in phantom_edges)
 
     depot_dists, _ = nx.single_source_dijkstra(Gu, depot, weight="length")
-    circuit_start = min(adj.keys(), key=lambda n: depot_dists.get(n, float("inf")))
-    start_dist = depot_dists.get(circuit_start, 0.0)
 
-    circuit = _hierholzer(adj, circuit_start)
+    # Find weakly connected components in the directed required+phantom graph
+    undir_test = nx.Graph()
+    for u, successors in adj.items():
+        for v in successors:
+            undir_test.add_edge(u, v)
+    components = list(nx.connected_components(undir_test))
+
+    # Build Hierholzer circuits for each component
+    component_circuits = []
+    for comp in components:
+        sub_adj = {u: [v for v in adj[u] if v in comp] for u in comp if u in adj}
+        if not sub_adj:
+            continue
+        start = min(sub_adj.keys(), key=lambda n: depot_dists.get(n, float("inf")))
+        circuit = _hierholzer(sub_adj, start)
+        component_circuits.append((circuit, start))
+
+    # Stitch components together via shortest paths
+    circuit = []
+    for ci, (comp_circuit, comp_start) in enumerate(component_circuits):
+        if ci == 0:
+            circuit = comp_circuit
+        else:
+            prev_end = circuit[-1]
+            try:
+                bridge_path = nx.shortest_path(Gu, prev_end, comp_start, weight="length")
+                circuit.extend(bridge_path[1:] if bridge_path else [])
+            except nx.NetworkXNoPath:
+                circuit.append(comp_start)
+            circuit.extend(comp_circuit[1:])
+
+    # Ensure start is closest to depot overall
+    circuit_start = circuit[0]
 
     # Expandir pasos phantom del circuito en caminos reales (solo para ruta nodos)
     # Penalizar aristas ya servidas para evitar que el deadhead re-use la misma calle

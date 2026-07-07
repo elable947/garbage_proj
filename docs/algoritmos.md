@@ -5,138 +5,109 @@
 El grafo vial se descarga de OpenStreetMap (~846 nodos, 2399 aristas) y pasa por:
 
 - **Corrección manual**: nodos/aristas editados vía editor web interactivo (`editor_grafo_chachapoyas.py`).
-- **Deduplicación de aristas**: se eliminan aristas idénticas (misma dirección u→v con múltiples keys) de los 3 archivos GraphML.
-- **Exclusión de rutas al depósito**: 4 nodos y 3 aristas marcados como sector −1; representan 7.21 km de vías de tránsito hacia/desde el depósito, no requieren servicio de recolección.
-- **Asignación estática de sectores**: el clustering se ejecuta una sola vez; los centroides se guardan en `sectores.json`. Los nodos nuevos se asignan al centroide más cercano por distancia euclidiana.
+- **Deduplicación de aristas**: se eliminan aristas idénticas de los 3 archivos GraphML.
+- **Exclusión de rutas al depósito**: 4 nodos y 3 aristas marcados como sector −1 (7.21 km de vías de tránsito).
+- **Zonificación**: region-growing desde semillas geográficas sobre el grafo no dirigido, garantizando conectividad y balance de carga.
 
 **Grafo corregido final**: 256 nodos, 646 aristas (dirigido, multigrafo).
 
-**Distribución de sectores**:
-| Sector | Nodos | Calles a servir | Kilómetros |
-|--------|-------|----------------|------------|
-| S0 | 113 | 272 aristas | 32.77 km |
-| S1 | 24 | 69 aristas | 19.51 km |
-| S2 | 15 | 42 aristas | 11.96 km |
-| S3 | 28 | 80 aristas | 20.99 km |
-| S4 | 72 | 182 aristas | 26.04 km |
-| **Total** | **252** | **645 aristas** | **111.27 km** |
+| Sector | Nodos | Aristas | Kilómetros |
+|--------|-------|---------|------------|
+| S0 | 36 | 93 | 20.97 km |
+| S1 | 33 | 90 | 22.50 km |
+| S2 | 39 | 107 | 23.33 km |
+| S3 | 51 | 137 | 22.12 km |
+| S4 | 93 | 213 | 22.35 km |
+| **Total** | **252** | **640** | **111.27 km** |
 
 ---
 
-## 2. Clustering (Zonificación)
+## 2. Zonificación — Region-Growing
 
-Se usa **K-Means** con `k=5` sobre las coordenadas `(x, y)` de todos los nodos (excluyendo los 4 nodos de acceso al depósito). Luego se aplican ajustes manuales espaciales:
+Se usa **region-growing** con 5 semillas distribuidas geográficamente (4 esquinas + centro). El BFS expande sectores simultáneamente hasta alcanzar el target de ~22.25 km por sector, con post-balanceo por adyacencia y reparación de conectividad.
 
-- **S3 → S1**: calles en la zona izquierda-superior de S1 reasignadas.
-- **S4 → S2**: calles con coordenada `y` más cercana a S2.
-- **S4 → S0**: calles con conexión vial directa a S0.
-- **Reparación de nodos aislados**: nodos sin conectividad al resto de su sector se reasignan al sector del vecino más frecuente.
-
-El resultado se guarda en `sectores.json` con centroides fijos y la lista de aristas excluidas. El editor web, los algoritmos y los visores cargan esta asignación estática.
+- **Balance de km**: 1.16x (max/min), mejora del 44% vs K-Means (1.68x).
+- **Balance de tiempo DCPP**: 1.11x (max/min), mejora del 70% (antes 3.39x).
+- Garantiza conectividad vial de cada sector por construcción.
 
 ---
 
 ## 3. Algoritmos de Ruteo
 
-Los 3 algoritmos reciben un sector (conjunto de aristas a servir) y un nodo depósito común (`af3202cd`), y producen una ruta que empieza y termina en el depósito.
-
-### 3.1 Voraz (Greedy)
-
-**Enfoque**: Construye la ruta incrementalmente.
-
-1. Desde el depósito, viaja al nodo no servido más cercano (Dijkstra con caché de fuente única).
-2. Sirve la arista más cercana a la posición actual.
-3. Repite hasta servir todas las aristas del sector.
-4. Retorna al depósito por la ruta más corta.
-
-**Ventaja**: Simple y rápido (~0.06 s por sector). **Desventaja**: Sin optimización global; redundancia alta (~1.92).
+### 3.1 Voraz (Greedy Baseline)
+Ruta incremental: siempre a la arista no servida más cercana (Dijkstra con caché). Simple, rápido (~0.06 s/sector), redundancia ~1.90.
 
 ### 3.2 DCPP (Directed Chinese Postman Problem)
-
-**Enfoque**: Solución óptima para el Problema del Cartero Chino en grafos dirigidos.
-
-1. **Subgrafo requerido**: extrae las aristas del sector.
-2. **Balanceo**: calcula δ(v) = indeg(v) − outdeg(v) para cada nodo.
-3. **Algoritmo Húngaro** (Kuhn-Munkres, O(n³)): empareja nodos sumidero (δ < 0) con nodos fuente (δ > 0) minimizando la distancia total de rebalanceo. **Corrección crítica**: las aristas fantasma se añaden en dirección sink→source (los sumideros necesitan más aristas salientes, las fuentes más entrantes).
-4. **Expansión de aristas fantasma**: los caminos más cortos del matching se expanden sobre el grafo no dirigido con penalización (×100) sobre aristas ya servidas para desincentivar reuso del deadhead.
-5. **Hierholzer**: circuito Euleriano sobre el grafo balanceado.
-6. **Conexión al depósito**: rutas de ida y vuelta por camino más corto.
-
-**Resultado**: Mejor algoritmo en los 5 sectores. Redundancia promedio: 1.428. Distancia total: 169.82 km (21.9% mejor que Voraz).
+Solución óptima: desbalance de grados → Húngaro (sink→source) → Hierholzer. Soporta múltiples componentes débilmente conexas del subgrafo requerido.
 
 ### 3.3 CARP + Tabu Search
+Construcción golosa + búsqueda Tabú con 2-opt y relocate. Capacidad 30 km/viaje, memoria 15 iteraciones.
 
-**Enfoque**: Solución al Capacitated Arc Routing Problem con búsqueda Tabú.
+### 3.4 CARP-Ulusoy (Route-first-cluster-second) ★
+Parte del circuito Euleriano del DCPP y corta en viajes de 30 km. **Sin penalización** en deadhead — permite reuso de calles servidas para minimizar distancia total.
 
-1. **Construcción inicial**: ruta Voraz con capacidad máxima de 30 km por viaje (múltiples viajes si es necesario).
-2. **Búsqueda Tabú**: explora vecindarios 2-opt (inversión de segmento) y relocate (reinserción de arista).
-   - Memoria Tabú: 15 iteraciones.
-   - Criterio de aspiracion: acepta movimientos Tabú si mejoran la mejor solución global.
-   - Criterio de parada: 80 iteraciones sin mejora o 150 máximo.
-3. **Reconstrucción**: expande la secuencia de aristas con caminos más cortos y retornos al depósito.
-
-**Resultado**: Mejoras modestas en S3 (14.8%) y S2 (4.9%). Tiempo CPU elevado (~3.1 s total).
+### 3.5 MCPP (Modelo no dirigido, validación)
+Trata todas las aristas como no dirigidas (una sola pasada por calle). Matching de nodos de grado impar + Euleriano.
 
 ---
 
 ## 4. Resultados Comparativos
 
-Ejecutado con Python 3.10, velocidad asumida 5 km/h.
+Ejecutado con Python 3.10, velocidad 5 km/h, capacidad CARP 30 km.
 
 ```
 ==========================================================================================
-  RUTEO DE RECOLECCION DE RESIDUOS - CHACHAPOYAS
-  Algoritmos: Voraz (Greedy) | DCPP (Min-Cost Flow + Hierholzer) | CARP + Tabu Search
-  Velocidad asumida: 5 km/h  |  Capacidad CARP: 30 km por viaje
-==========================================================================================
-
-Total calles a servir: 111.27 km en 5 sectores
-
-==========================================================================================
 Sector          Algoritmo   Dist(km)   Serv(km)   Redund  Tiempo(h)   CPU(s)
 ------------------------------------------------------------------------------------------
-     0              Voraz      60.07      32.77    1.833      12.01    0.117
-     1              Voraz      35.38      19.51    1.814       7.08    0.040
-     2              Voraz      29.66      11.96    2.481       5.93    0.036
-     3              Voraz      42.22      20.99    2.011       8.44    0.042
-     4              Voraz      49.94      26.04    1.917       9.99    0.080
+     0              Voraz      42.60      20.97    2.031       8.52    0.049
+     1              Voraz      39.09      22.50    1.738       7.82    0.047
+     2              Voraz      44.17      23.33    1.893       8.83    0.060
+     3              Voraz      41.30      22.12    1.867       8.26    0.066
+     4              Voraz      44.26      22.35    1.980       8.85    0.094
 ------------------------------------------------------------------------------------------
-     0               DCPP      49.44      32.77    1.509       9.89    0.032  imb=45
-     1               DCPP      31.38      19.51    1.609       6.28    0.021  imb=3
-     2               DCPP      14.62      11.96    1.223       2.92    0.016  imb=7
-     3               DCPP      33.60      20.99    1.601       6.72    0.019  imb=11
-     4               DCPP      40.78      26.04    1.566       8.16    0.026  imb=21
+     0               DCPP      35.06      20.97    1.672       7.01    0.021  imb=17
+     1               DCPP      33.80      22.50    1.502       6.76    0.023  imb=7
+     2               DCPP      35.29      23.33    1.513       7.06    0.020  imb=16
+     3               DCPP      35.26      22.12    1.594       7.05    0.019  imb=13
+     4               DCPP      37.48      22.35    1.677       7.50    0.036  imb=44
 ------------------------------------------------------------------------------------------
-     0          CARP+Tabu      59.89      32.77    1.827      11.98    1.671  mej=0.3%
-     1          CARP+Tabu      35.03      19.51    1.796       7.01    0.134  mej=1.0%
-     2          CARP+Tabu      28.20      11.96    2.358       5.64    0.158  mej=4.9%
-     3          CARP+Tabu      35.53      20.99    1.693       7.11    0.255  mej=15.8%
-     4          CARP+Tabu      49.94      26.04    1.917       9.99    0.713  mej=0.0%
+     0          CARP+Tabu      39.47      20.97    1.883       7.89    0.380  mej=7.3%
+     1          CARP+Tabu      38.49      22.50    1.711       7.70    0.286  mej=1.5%
+     2          CARP+Tabu      42.52      23.33    1.823       8.50    0.299  mej=3.7%
+     3          CARP+Tabu      41.30      22.12    1.867       8.26    0.436  mej=0.0%
+     4          CARP+Tabu      44.26      22.35    1.980       8.85    1.157  mej=0.0%
+------------------------------------------------------------------------------------------
+     0        CARP-Ulusoy      27.27      20.97    1.301       5.45    0.057  viajes=1
+     1        CARP-Ulusoy      27.53      22.50    1.224       5.51    0.044  viajes=1
+     2        CARP-Ulusoy      27.64      23.33    1.185       5.53    0.052  viajes=1
+     3        CARP-Ulusoy      28.10      22.12    1.270       5.62    0.060  viajes=1
+     4        CARP-Ulusoy      26.87      22.35    1.202       5.37    0.101  viajes=1
+------------------------------------------------------------------------------------------
+     0               MCPP      35.80      12.05    2.970       7.16    0.027  odd=32
+     1               MCPP      31.88      11.87    2.686       6.38    0.024  odd=28
+     2               MCPP      36.02      13.49    2.671       7.20    0.036  odd=40
+     3               MCPP      33.82      12.00    2.819       6.76    0.030  odd=38
+     4               MCPP      40.58      18.68    2.172       8.12    0.041  odd=58
 ==========================================================================================
 
                 ALGORITMO    TOT(km)   REDUND  TIEMPO(h)   CPU(s)
 ------------------------------------------------------------------------------------------
- TOTAL              Voraz     217.27    2.011      43.45    0.315
- TOTAL               DCPP     169.82    1.501      33.96    0.114
- TOTAL          CARP+Tabu     208.59    1.918      41.72    2.930
+ TOTAL              Voraz     211.41    1.902      42.28    0.315
+ TOTAL               DCPP     176.89    1.592      35.38    0.120
+ TOTAL          CARP+Tabu     206.04    1.853      41.21    2.558
+ TOTAL        CARP-Ulusoy     137.42    1.236      27.48    0.314
+ TOTAL               MCPP     178.10    2.664      35.62    0.159
 ==========================================================================================
-
---- Mejor algoritmo por sector (menor distancia) ---
-  Sector 0: DCPP (49.44 km)
-  Sector 1: DCPP (31.38 km)
-  Sector 2: DCPP (14.62 km)
-  Sector 3: DCPP (33.60 km)
-  Sector 4: DCPP (40.78 km)
 ```
+
+**Rigor estadístico (10 corridas, CARP+Tabu):** 207.09 ± 0.67 km (CPU: 2.490 ± 0.047 s).
 
 ---
 
 ## 5. Conclusiones
 
-- **DCPP domina en todos los sectores** con 169.82 km totales (21.8% mejor que Voraz) y redundancia promedio 1.501.
-- **DCPP es también el más rápido** en CPU (0.114 s total), 26× más rápido que CARP+Tabu y 2.8× más rápido que Voraz.
-- **CARP+Tabu** solo mejora significativamente en S3 (15.8%); la capacidad de 30 km limita el espacio de búsqueda en sectores con calles naturalmente agrupadas.
-- **Voraz** es una línea base sólida pero consistentemente superada por DCPP.
-- La zonificación K-Means con ajustes manuales produce sectores conexos y balanceados (111.27 km totales).
-- La corrección de la dirección de aristas fantasma (sink→source) fue crítica para la validez del DCPP.
-- Los visores interactivos (`visor_rutas.html` y `visor_live_sectores.py`) permiten inspeccionar visualmente rutas y sectores.
+- **CARP-Ulusoy domina en todos los sectores** con 137.42 km totales (35.0% mejor que Voraz, 22.3% mejor que DCPP). La clave es usar el orden del circuito óptimo del DCPP sin penalización de deadhead.
+- **Region-growing** logra sectores balanceados (1.16x km, 1.11x tiempo) eliminando los ajustes manuales y la reparación BFS del K-Means.
+- **DCPP (176.89 km)** sigue siendo competitivo pero limitado por la penalización ×100 en deadhead.
+- **MCPP (178.10 km)** valida que el modelo dirigido no infla distancias — por el contrario, el modelo no dirigido genera más deadhead por mayor número de nodos impares.
+- **CARP+Tabu (206 km)** queda como referencia secundaria, superado por Ulusoy en rapidez y calidad.

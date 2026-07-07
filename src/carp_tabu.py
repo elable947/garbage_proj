@@ -57,7 +57,7 @@ def _voraz_seq(Gu, depot, required, edge_len):
 
 # ── Tabu Search ────────────────────────────────────────────────────
 
-def _tabu_search(Gu, depot, initial_seq, edge_len, max_iter=300, tabu_tenure=15):
+def _tabu_search(Gu, depot, initial_seq, edge_len, max_iter=300, tabu_tenure=15, seed=None):
     n = len(initial_seq)
     if n < 4:
         return list(initial_seq)
@@ -68,7 +68,8 @@ def _tabu_search(Gu, depot, initial_seq, edge_len, max_iter=300, tabu_tenure=15)
 
     tabu_set = set()
     no_improve = 0
-    random.seed(42)
+    if seed is not None:
+        random.seed(seed)
 
     for iteration in range(max_iter):
         candidates = []
@@ -199,7 +200,7 @@ def _build_route(Gu, depot, seq, edge_len, capacity=30000.0):
 
 # ── CARP + Tabu Search principal ──────────────────────────────────
 
-def carp_tabu(sector_id: int, capacidad_m: float = 30000.0, max_iter: int = 300):
+def carp_tabu(sector_id: int, capacidad_m: float = 30000.0, max_iter: int = 300, seed=None):
     t0 = time.perf_counter()
 
     G, Gu, depot, all_sector_edges = _load_data()
@@ -215,7 +216,7 @@ def carp_tabu(sector_id: int, capacidad_m: float = 30000.0, max_iter: int = 300)
     init_seq = _voraz_seq(Gu, depot, required, edge_len)
     init_dist = _total_distance(Gu, depot, init_seq, edge_len)
 
-    improved_seq = _tabu_search(Gu, depot, init_seq, edge_len, max_iter=max_iter)
+    improved_seq = _tabu_search(Gu, depot, init_seq, edge_len, max_iter=max_iter, seed=seed)
     improved_dist = _total_distance(Gu, depot, improved_seq, edge_len)
 
     route, final_dist = _build_route(Gu, depot, improved_seq, edge_len, capacity=capacidad_m)
