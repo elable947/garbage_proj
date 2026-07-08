@@ -2,7 +2,7 @@
 
 ## Resumen
 
-La recolección de residuos sólidos urbanos representa entre el 60% y el 80% del costo operativo total de los sistemas municipales de gestión de residuos, y la optimización de rutas puede generar ahorros sustanciales en combustible, tiempo y emisiones. Este estudio presenta un análisis comparativo de cinco enfoques algorítmicos para el ruteo de recolección en la ciudad de Chachapoyas, Perú, ubicada a 2,335 m s.n.m. en la cordillera de los Andes. Se construyó un grafo vial dirigido con 256 nodos y 646 aristas a partir de datos OpenStreetMap, corregido mediante un editor web interactivo y particionado en 5 sectores operativos mediante un algoritmo de region-growing sobre el grafo, garantizando conectividad y balance de carga. Se implementaron y evaluaron cinco algoritmos: un método Voraz como línea base, el Problema del Cartero Chino Dirigido (DCPP) con algoritmo Húngaro para balanceo de grados y Hierholzer para circuitos Eulerianos, el Problema de Ruteo de Arcos Capacitado con búsqueda Tabú (CARP+Tabu), el algoritmo CARP-Ulusoy basado en la estrategia route-first-cluster-second, y un modelo no dirigido de referencia (MCPP) para validar el modelo dirigido. Todos los algoritmos utilizan la misma métrica de distancia real sobre el grafo no dirigido, garantizando comparación justa. El algoritmo CARP-Ulusoy superó consistentemente a los demás métodos en los 5 sectores, alcanzando una distancia total de 137.97 km con redundancia promedio de 1.241, lo que representa una mejora del 34.9% sobre la línea base Voraz (211.80 km) y del 22.3% sobre el DCPP (177.58 km). El DCPP y el MCPP obtuvieron resultados prácticamente idénticos (177.58 km vs 177.63 km), validando que el modelo dirigido no introduce sesgo. El CARP+Tabu (208.78 km) apenas mejoró la línea base, confirmando que la restricción de capacidad no es el factor limitante cuando los sectores están balanceados. Estos resultados demuestran que la estrategia route-first-cluster-second es el enfoque más eficiente para el ruteo de recolección en el contexto de Chachapoyas y potencialmente en otras ciudades con topografía similar.
+La recolección de residuos sólidos urbanos representa entre el 60% y el 80% del costo operativo total de los sistemas municipales de gestión de residuos, y la optimización de rutas puede generar ahorros sustanciales en combustible, tiempo y emisiones. Este estudio presenta un análisis comparativo de cinco enfoques algorítmicos para el ruteo de recolección en la ciudad de Chachapoyas, Perú, ubicada a 2,335 m s.n.m. en la cordillera de los Andes. Se construyó un grafo vial dirigido con 256 nodos y 646 aristas a partir de datos OpenStreetMap, corregido mediante un editor web interactivo y particionado en 5 sectores operativos mediante un algoritmo de region-growing sobre el grafo, garantizando conectividad y balance de carga. Se implementaron y evaluaron cinco algoritmos: un método Voraz como línea base, el Problema del Cartero Chino Dirigido (DCPP) con algoritmo Húngaro para balanceo de grados y Hierholzer para circuitos Eulerianos, el Problema de Ruteo de Arcos Capacitado con búsqueda Tabú (CARP+Tabu), el algoritmo CARP-Ulusoy basado en la estrategia route-first-cluster-second, y un modelo no dirigido de referencia (MCPP) para validar el modelo dirigido. Todos los algoritmos utilizan la misma métrica de distancia real sobre el grafo no dirigido, garantizando comparación justa. El algoritmo CARP-Ulusoy superó consistentemente a los demás métodos en los 5 sectores, alcanzando una distancia total de 137.41 km con redundancia promedio de 1.237, lo que representa una mejora del 35.0% sobre la línea base Voraz (211.51 km) y del 22.1% sobre el DCPP (176.35 km). El DCPP y el MCPP obtuvieron resultados prácticamente idénticos (176.35 km vs 178.51 km), validando que el modelo dirigido no introduce sesgo. El CARP+Tabu (208.78 km) apenas mejoró la línea base, confirmando que la restricción de capacidad no es el factor limitante cuando los sectores están balanceados. Estos resultados demuestran que la estrategia route-first-cluster-second es el enfoque más eficiente para el ruteo de recolección en el contexto de Chachapoyas y potencialmente en otras ciudades con topografía similar.
 
 ---
 
@@ -88,31 +88,31 @@ La Tabla 1 presenta los resultados comparativos de los cinco algoritmos para los
 
 | S | Algoritmo | Dist (km) | Serv (km) | Redund | Tiempo (h) | CPU (s) | Nota |
 |---|-----------|-----------|-----------|--------|------------|---------|------|
-| 0 | Voraz | 43.70 | 21.83 | 2.002 | 8.74 | 0.049 | — |
-| 1 | Voraz | 39.09 | 22.50 | 1.738 | 7.82 | 0.046 | — |
-| 2 | Voraz | 44.17 | 23.33 | 1.893 | 8.83 | 0.059 | — |
-| 3 | Voraz | 41.30 | 22.12 | 1.867 | 8.26 | 0.064 | — |
-| 4 | Voraz | 43.55 | 21.49 | 2.027 | 8.71 | 0.093 | — |
-| 0 | DCPP | 36.37 | 21.83 | 1.666 | 7.27 | 0.022 | imb=19 |
+| 0 | Voraz | 41.96 | 20.54 | 2.043 | 8.39 | 0.048 | — |
+| 1 | Voraz | 39.09 | 22.50 | 1.738 | 7.82 | 0.048 | — |
+| 2 | Voraz | 44.17 | 23.33 | 1.893 | 8.83 | 0.061 | — |
+| 3 | Voraz | 41.30 | 22.12 | 1.867 | 8.26 | 0.067 | — |
+| 4 | Voraz | 44.99 | 22.78 | 1.975 | 9.00 | 0.099 | — |
+| 0 | DCPP | 34.20 | 20.54 | 1.665 | 6.84 | 0.020 | imb=15 |
 | 1 | DCPP | 33.80 | 22.50 | 1.502 | 6.76 | 0.021 | imb=7 |
-| 2 | DCPP | 35.29 | 23.33 | 1.513 | 7.06 | 0.019 | imb=16 |
+| 2 | DCPP | 35.29 | 23.33 | 1.513 | 7.06 | 0.018 | imb=16 |
 | 3 | DCPP | 35.26 | 22.12 | 1.594 | 7.05 | 0.017 | imb=13 |
-| 4 | DCPP | 36.86 | 21.49 | 1.715 | 7.37 | 0.035 | imb=43 |
-| 0 | CARP+Tabu | 42.89 | 21.83 | 1.965 | 8.58 | 0.327 | mej=1.9% |
-| 1 | CARP+Tabu | 38.90 | 22.50 | 1.729 | 7.78 | 0.230 | mej=0.5% |
-| 2 | CARP+Tabu | 42.14 | 23.33 | 1.806 | 8.43 | 0.311 | mej=4.6% |
-| 3 | CARP+Tabu | 41.30 | 22.12 | 1.867 | 8.26 | 0.434 | mej=0.0% |
-| 4 | CARP+Tabu | 43.55 | 21.49 | 2.027 | 8.71 | 1.108 | mej=0.0% |
-| 0 | CARP-Ulusoy | 28.37 | 21.83 | 1.300 | 5.67 | 0.073 | viajes=1 |
-| 1 | CARP-Ulusoy | 27.53 | 22.50 | 1.224 | 5.51 | 0.044 | viajes=1 |
-| 2 | CARP-Ulusoy | 27.64 | 23.33 | 1.185 | 5.53 | 0.052 | viajes=1 |
-| 3 | CARP-Ulusoy | 28.10 | 22.12 | 1.270 | 5.62 | 0.061 | viajes=1 |
-| 4 | CARP-Ulusoy | 26.33 | 21.49 | 1.225 | 5.27 | 0.103 | viajes=1 |
-| 0 | MCPP | 35.80 | 12.91 | 2.772 | 7.16 | 0.028 | odd=34 |
+| 4 | DCPP | 37.80 | 22.78 | 1.659 | 7.56 | 0.035 | imb=43 |
+| 0 | CARP+Tabu | 39.68 | 20.54 | 1.932 | 7.94 | 0.348 | mej=5.5% |
+| 1 | CARP+Tabu | 38.75 | 22.50 | 1.723 | 7.75 | 0.218 | mej=0.9% |
+| 2 | CARP+Tabu | 41.89 | 23.33 | 1.796 | 8.38 | 0.308 | mej=5.2% |
+| 3 | CARP+Tabu | 41.30 | 22.12 | 1.867 | 8.26 | 0.436 | mej=0.0% |
+| 4 | CARP+Tabu | 44.99 | 22.78 | 1.975 | 9.00 | 1.198 | mej=0.0% |
+| 0 | CARP-Ulusoy | 26.84 | 20.54 | 1.307 | 5.37 | 0.055 | viajes=1 |
+| 1 | CARP-Ulusoy | 27.53 | 22.50 | 1.224 | 5.51 | 0.045 | viajes=1 |
+| 2 | CARP-Ulusoy | 27.64 | 23.33 | 1.185 | 5.53 | 0.053 | viajes=1 |
+| 3 | CARP-Ulusoy | 28.10 | 22.12 | 1.270 | 5.62 | 0.062 | viajes=1 |
+| 4 | CARP-Ulusoy | 27.29 | 22.78 | 1.198 | 5.46 | 0.104 | viajes=1 |
+| 0 | MCPP | 35.80 | 11.62 | 3.081 | 7.16 | 0.027 | odd=30 |
 | 1 | MCPP | 31.88 | 11.87 | 2.686 | 6.38 | 0.025 | odd=28 |
 | 2 | MCPP | 36.02 | 13.49 | 2.671 | 7.20 | 0.036 | odd=40 |
-| 3 | MCPP | 33.82 | 12.00 | 2.819 | 6.76 | 0.031 | odd=38 |
-| 4 | MCPP | 40.12 | 18.14 | 2.212 | 8.02 | 0.043 | odd=58 |
+| 3 | MCPP | 33.82 | 12.00 | 2.819 | 6.76 | 0.030 | odd=38 |
+| 4 | MCPP | 41.00 | 18.69 | 2.193 | 8.20 | 0.041 | odd=60 |
 
 La Tabla 2 consolida las métricas agregadas.
 
@@ -120,17 +120,17 @@ La Tabla 2 consolida las métricas agregadas.
 
 | Algoritmo | Total (km) | Redund Prom | Tiempo Total (h) | CPU Total (s) |
 |-----------|-----------|-------------|------------------|---------------|
-| Voraz | 211.80 | 1.905 | 42.36 | 0.311 |
-| DCPP | 177.58 | 1.598 | 35.52 | 0.114 |
-| CARP+Tabu | 208.78 | 1.879 | 41.76 | 2.410 |
-| CARP-Ulusoy | 137.97 | 1.241 | 27.59 | 0.334 |
-| MCPP | 177.63 | 2.632 | 35.53 | 0.163 |
+| Voraz | 211.51 | 1.903 | 42.30 | 0.323 |
+| DCPP | 176.35 | 1.587 | 35.27 | 0.111 |
+| CARP+Tabu | 206.61 | 1.858 | 41.32 | 2.508 |
+| CARP-Ulusoy | 137.41 | 1.237 | 27.48 | 0.318 |
+| MCPP | 178.51 | 2.690 | 35.70 | 0.160 |
 
-El algoritmo CARP-Ulusoy logró la menor distancia total en los 5 sectores, con una reducción del 34.9% respecto al Voraz y del 22.3% respecto al DCPP. La redundancia promedio de 1.241 implica que por cada kilómetro de calle servida se recorrieron 0.241 km adicionales de deadhead, frente a 0.905 km del Voraz y 0.598 km del DCPP. Destaca la consistencia del CARP-Ulusoy entre sectores, con una desviación de apenas 1.6 km entre el sector más corto (26.33 km, S4) y el más largo (28.37 km, S0).
+El algoritmo CARP-Ulusoy logró la menor distancia total en los 5 sectores, con una reducción del 35.0% respecto al Voraz y del 22.1% respecto al DCPP. La redundancia promedio de 1.237 implica que por cada kilómetro de calle servida se recorrieron 0.237 km adicionales de deadhead, frente a 0.903 km del Voraz y 0.587 km del DCPP. Destaca la consistencia del CARP-Ulusoy entre sectores, con una desviación de apenas 1.3 km entre el sector más corto (26.84 km, S0) y el más largo (28.10 km, S3).
 
 El DCPP, con 177.58 km, también supera al Voraz en un 16.2%, confirmando la ventaja de la optimización global sobre la estrategia incremental. Sin embargo, su rendimiento está limitado por la necesidad de recorrer aristas fantasma —caminos de deadhead impuestos por el matching Húngaro para balancear grados— que el CARP-Ulusoy evita al conectar las aristas requeridas directamente por camino más corto.
 
-El CARP+Tabu (208.78 km) apenas mejoró un 1.4% sobre el Voraz, un resultado débil que contrasta con la efectividad del CARP-Ulusoy. La restricción de capacidad de 30 km por viaje resultó no vinculante en ningún sector (todos los viajes únicos del CARP-Ulusoy tienen un solo viaje por sector), lo que explica por qué la búsqueda Tabú —diseñada para reorganizar viajes— no encuentra mejoras sustanciales.
+El CARP+Tabu (206.61 km) apenas mejoró un 2.3% sobre el Voraz, un resultado débil que contrasta con la efectividad del CARP-Ulusoy. La restricción de capacidad de 30 km por viaje resultó no vinculante en ningún sector (todos los viajes únicos del CARP-Ulusoy tienen un solo viaje por sector), lo que explica por qué la búsqueda Tabú —diseñada para reorganizar viajes— no encuentra mejoras sustanciales.
 
 El MCPP obtuvo 177.63 km, prácticamente idéntico al DCPP (177.58 km). Esta equivalencia valida el modelo dirigido: a pesar de que el modelo no dirigido reduce las aristas requeridas a la mitad (al fusionar pares opuestos), el mayor número de nodos de grado impar resultante —y el consiguiente deadhead del matching— compensa exactamente la reducción en distancia servida. El modelo dirigido no introduce sesgo en la distancia total recorrida.
 
@@ -150,7 +150,7 @@ El MCPP transformó las aristas dirigidas en no dirigidas, reduciendo el número
 
 ## 4. Discusión
 
-Los resultados de este estudio demuestran que la estrategia route-first-cluster-second, materializada en el algoritmo CARP-Ulusoy, ofrece el mejor rendimiento para el problema de ruteo de recolección en Chachapoyas. La reducción del 34.9% en distancia total respecto al Voraz y del 22.3% respecto al DCPP representa un ahorro operativo sustancial, máxime considerando que todos los algoritmos fueron evaluados con la misma métrica de distancia real sobre el mismo grafo.
+Los resultados de este estudio demuestran que la estrategia route-first-cluster-second, materializada en el algoritmo CARP-Ulusoy, ofrece el mejor rendimiento para el problema de ruteo de recolección en Chachapoyas. La reducción del 35.0% en distancia total respecto al Voraz y del 22.1% respecto al DCPP representa un ahorro operativo sustancial, máxime considerando que todos los algoritmos fueron evaluados con la misma métrica de distancia real sobre el mismo grafo.
 
 La superioridad del CARP-Ulusoy sobre el DCPP se explica por un mecanismo fundamental: el DCPP debe recorrer las aristas fantasma del matching Húngaro como deadhead obligatorio para mantener la propiedad Euleriana del circuito, mientras que el CARP-Ulusoy —al heredar únicamente el orden de las aristas requeridas del circuito— conecta cada arista con la siguiente mediante el camino más corto directo, eliminando el deadhead de las aristas fantasma. Esta diferencia representa aproximadamente 40 km en el total agregado de los 5 sectores, y constituye la principal contribución de eficiencia del enfoque route-first-cluster-second.
 
@@ -176,13 +176,13 @@ Varias líneas de investigación se derivan de este estudio. La incorporación d
 
 Este estudio presentó una comparación sistemática de cinco algoritmos de ruteo para la optimización de la recolección de residuos sólidos en Chachapoyas, Perú, utilizando un grafo vial corregido de 256 nodos y 646 aristas, particionado en 5 sectores balanceados mediante region-growing, y evaluado con métrica de distancia unificada sobre el mismo grafo.
 
-El algoritmo CARP-Ulusoy superó a todos los demás métodos en los 5 sectores, con una distancia total de 137.97 km y redundancia de 1.241, representando una mejora del 34.9% sobre el Voraz y del 22.3% sobre el DCPP. La clave de su rendimiento es evitar el deadhead de las aristas fantasma impuestas por el matching Húngaro, conectando las aristas requeridas directamente por camino más corto.
+El algoritmo CARP-Ulusoy superó a todos los demás métodos en los 5 sectores, con una distancia total de 137.41 km y redundancia de 1.237, representando una mejora del 35.0% sobre el Voraz y del 22.1% sobre el DCPP. La clave de su rendimiento es evitar el deadhead de las aristas fantasma impuestas por el matching Húngaro, conectando las aristas requeridas directamente por camino más corto.
 
-El DCPP (177.58 km) confirma su posición como referencia óptima para el problema del cartero chino, pero su acoplamiento con el matching de grados le impone un costo de deadhead que el CARP-Ulusoy elimina. El CARP+Tabu (208.78 km) demostró ser el enfoque menos efectivo, con la restricción de capacidad resultando no vinculante para los sectores balanceados.
+El DCPP (176.35 km) confirma su posición como referencia óptima para el problema del cartero chino, pero su acoplamiento con el matching de grados le impone un costo de deadhead que el CARP-Ulusoy elimina. El CARP+Tabu (206.61 km) demostró ser el enfoque menos efectivo, con la restricción de capacidad resultando no vinculante para los sectores balanceados.
 
 La zonificación por region-growing produjo sectores con balance de carga de 1.16x, una mejora del 44% sobre K-Means, garantizando conectividad por construcción y eliminando la necesidad de ajustes manuales.
 
-El MCPP (177.63 km) validó que el modelo dirigido no introduce sesgo en la distancia total, siendo los modelos dirigido y no dirigido equivalentes para la red vial de Chachapoyas.
+El MCPP (178.51 km) validó que el modelo dirigido no introduce sesgo en la distancia total, siendo los modelos dirigido y no dirigido equivalentes para la red vial de Chachapoyas.
 
 La metodología completa —incluyendo editor vial, zonificación, cinco algoritmos y visores interactivos— está disponible como código abierto, facilitando su reproducción y adaptación a otros contextos urbanos.
 
