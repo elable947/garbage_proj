@@ -223,11 +223,11 @@ L.circleMarker(DEPOT, {radius:8, color:"#000", fillColor:"#fff", fillOpacity:1, 
   .addTo(map).bindTooltip("Deposito", {permanent:true, direction:"top"});
 
 const cartIcon = L.divIcon({
-  html: '<div style="background:#fff;border:2px solid #e67e22;border-radius:50%;width:14px;height:14px;box-shadow:0 0 8px #e67e22"></div>',
+  html: '<div style="background:#fff;border:2px solid #ffd700;border-radius:50%;width:14px;height:14px;box-shadow:0 0 8px #ffd700"></div>',
   iconSize: [14,14], iconAnchor: [7,7],
 });
 const cartMarker = L.marker([0,0], {icon: cartIcon, zIndexOffset:1000}).addTo(map);
-const trailLine = L.polyline([], {color:"#e67e22", weight:4, opacity:0.9, dashArray:"6,4"}).addTo(map);
+const trailLine = L.polyline([], {color:"#ffd700", weight:5, opacity:0.95}).addTo(map);
 const returnLine = L.polyline([], {color:"#e74c3c", weight:4, opacity:0.8, dashArray:"10,6"}).addTo(map);
 const bgLines = {};
 
@@ -287,7 +287,7 @@ function updateLegend() {
     }
   }
   h += '<hr style="border-color:#444;margin:4px 0">';
-  h += '<i style="background:#e67e22"></i> Recorrido<br>';
+  h += '<i style="background:#ffd700"></i> Recorrido<br>';
   h += '<i style="background:#e74c3c"></i> Retorno dep&oacute;sito';
   document.getElementById("legendDiv").innerHTML = h;
 }
