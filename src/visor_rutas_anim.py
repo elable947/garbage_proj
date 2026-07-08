@@ -65,6 +65,14 @@ def _build_edge_geoms():
         pts = _parse_geometry(val)
         if pts:
             edge_geoms[(u, v)] = pts
+        else:
+            # Fallback: use node coordinates as 2-point geometry
+            try:
+                ux, uy = float(G.nodes[u]["x"]), float(G.nodes[u]["y"])
+                vx, vy = float(G.nodes[v]["x"]), float(G.nodes[v]["y"])
+                edge_geoms[(u, v)] = [(uy, ux), (vy, vx)]
+            except (ValueError, KeyError, TypeError):
+                pass
 
 
 def _edge_coords(a, b):
@@ -90,7 +98,18 @@ def _route_to_coords(nodes):
             for pt in geom[1:]:
                 coords.append(pt)
         else:
-            coords.append(_node_ll(b))
+            # Edge not in graph: expand shortest path through intermediate nodes
+            try:
+                sp = nx.shortest_path(Gu, a, b, weight="length")
+                for j in range(1, len(sp)):
+                    seg = _edge_coords(sp[j-1], sp[j])
+                    if seg and len(seg) > 1:
+                        for pt in (seg if j == 1 else seg[1:]):
+                            coords.append(pt)
+                    else:
+                        coords.append(_node_ll(sp[j]))
+            except nx.NetworkXNoPath:
+                coords.append(_node_ll(b))
     return coords
 
 
