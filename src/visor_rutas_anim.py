@@ -11,12 +11,11 @@ import os
 import sys
 import webbrowser
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import networkx as nx
-from collections import defaultdict, Counter
 from shapely import wkt as wkt_module
 
 from _data import _load_data
@@ -28,18 +27,16 @@ from carp_ulusoy import carp_ulusoy
 SECTOR_COLORS = {0: "#e74c3c", 1: "#3498db", 2: "#2ecc71", 3: "#f39c12", 4: "#9b59b6"}
 SECTOR_NAMES = {0: "S0", 1: "S1", 2: "S2", 3: "S3", 4: "S4"}
 ALGO_NAMES = {
-    "voraz": "Voraz",
-    "dcpp": "DCPP",
-    "carp_tabu": "CARP+Tabu",
-    "carp_ulusoy": "CARP-Ulusoy",
+    "voraz": "Voraz", "dcpp": "DCPP",
+    "carp_tabu": "CARP+Tabu", "carp_ulusoy": "CARP-Ulusoy",
 }
 
 G = None
 Gu = None
 depot = None
-all_routes = {}  # {(sector, algo_key): {route_nodes, coords, dist_km, serv_km, redund}}
-best_algo = {}   # {sector: algo_key}
-edge_lookup = {}
+all_routes = {}
+best_algo = {}
+edge_geoms = {}  # {(u, v): [(lat, lon), ...]}
 
 
 def _parse_geometry(val):
@@ -61,8 +58,26 @@ def _node_ll(n):
     return (G.nodes[n]["y"], G.nodes[n]["x"])
 
 
+def _build_edge_geoms():
+    global edge_geoms
+    for u, v, k in G.edges(keys=True):
+        val = G.edges[u, v, k].get("geometry")
+        pts = _parse_geometry(val)
+        if pts:
+            edge_geoms[(u, v)] = pts
+
+
+def _edge_coords(a, b):
+    pts = edge_geoms.get((a, b))
+    if pts:
+        return pts
+    pts = edge_geoms.get((b, a))
+    if pts:
+        return list(reversed(pts))
+    return None
+
+
 def _route_to_coords(nodes):
-    """Build coords from node sequence using edge geometries for curves."""
     if not nodes:
         return []
     coords = [_node_ll(nodes[0])]
@@ -70,7 +85,7 @@ def _route_to_coords(nodes):
         a, b = nodes[i], nodes[i + 1]
         if a == b:
             continue
-        geom = _edge_geom_direct(a, b)
+        geom = _edge_coords(a, b)
         if geom and len(geom) > 1:
             for pt in geom[1:]:
                 coords.append(pt)
@@ -79,59 +94,12 @@ def _route_to_coords(nodes):
     return coords
 
 
-def _edge_geom_direct(a, b):
-    """Get (lat, lon) coords of the directed edge a->b from the graph geometry."""
-    if G.has_edge(a, b):
-        for k in G[a][b]:
-            val = G.edges[a, b, k].get("geometry")
-            pts = _parse_geometry(val)
-            if pts:
-                return pts
-    try:
-        sp = nx.shortest_path(Gu, a, b, weight="length")
-        pts = []
-        for i in range(len(sp) - 1):
-            u, v = sp[i], sp[i + 1]
-            seg_pts = _edge_geom_direct_segment(u, v)
-            if seg_pts:
-                for p in (seg_pts[1:] if i > 0 else seg_pts):
-                    pts.append(p)
-            else:
-                pts.append(_node_ll(v))
-        return pts
-    except nx.NetworkXNoPath:
-        return None
-
-
-def _edge_geom_direct_segment(u, v):
-    """Get geometry for a single edge segment u->v."""
-    if G.has_edge(u, v):
-        for k in G[u][v]:
-            val = G.edges[u, v, k].get("geometry")
-            pts = _parse_geometry(val)
-            if pts:
-                return pts
-    return None
-
-
-def _compute_return_path(end_node):
-    try:
-        sp = nx.shortest_path(Gu, end_node, depot, weight="length")
-        return _route_to_coords(sp)
-    except nx.NetworkXNoPath:
-        return []
-
-
 def compute_all_routes():
-    global G, Gu, depot, all_routes, best_algo, edge_lookup
+    global G, Gu, depot, all_routes, best_algo
     print("Cargando datos...")
     G, Gu, depot, _se = _load_data()
-
-    for u, v, k in G.edges(keys=True):
-        val = G.edges[u, v, k].get("geometry", "")
-        pts = _parse_geometry(val)
-        if pts:
-            edge_lookup[(u, v)] = pts
+    _build_edge_geoms()
+    print(f"  Geometrias: {len(edge_geoms)} aristas con curvas")
 
     algos = [
         ("voraz", voraz, {}),
@@ -145,27 +113,31 @@ def compute_all_routes():
         for s in range(5):
             r = func(s, **kwargs)
             coords = _route_to_coords(r["route_nodes"])
-            return_coords = _compute_return_path(r["route_nodes"][-1]) if r["route_nodes"] else []
+            last_node = r["route_nodes"][-1] if r["route_nodes"] else depot
+            if last_node != depot:
+                try:
+                    sp = nx.shortest_path(Gu, last_node, depot, weight="length")
+                    return_coords = _route_to_coords(sp)
+                except nx.NetworkXNoPath:
+                    return_coords = []
+            else:
+                return_coords = []
             all_routes[(s, key)] = {
                 "coords": coords,
                 "return_coords": return_coords,
                 "dist_km": round(r["total_distance_m"] / 1000, 2),
                 "serv_km": round(r["total_serviced_m"] / 1000, 2),
                 "redund": round(r["redundancy"], 3),
-                "route_nodes": r["route_nodes"],
-                "extra": r.get("imbalance_units", r.get("num_trips", r.get("improvement_pct", ""))),
+                "extra": r.get("imbalance_units", r.get("num_trips",
+                         r.get("improvement_pct", ""))),
             }
 
     for s in range(5):
-        best = min(
-            (k for k in [a[0] for a in algos]),
-            key=lambda k: all_routes[(s, k)]["dist_km"],
-        )
+        best = min((k for k in [a[0] for a in algos]),
+                   key=lambda k: all_routes[(s, k)]["dist_km"])
         best_algo[s] = best
         print(f"  S{s}: mejor = {ALGO_NAMES[best]} ({all_routes[(s,best)]['dist_km']} km)")
 
-    depot_ll = _node_ll(depot)
-    print(f"  Depot: {depot_ll}")
     print(f"Listo. {len(all_routes)} rutas calculadas.")
 
 
@@ -208,8 +180,8 @@ body{font-family:system-ui,sans-serif;background:#1a1a2e;color:#eee;display:flex
       <option value="carp_tabu">CARP+Tabu</option><option value="carp_ulusoy">CARP-Ulusoy</option>
     </select>
   </label>
-  <button id="playBtn">▶ Play</button>
-  <button id="resetBtn">↺ Reset</button>
+  <button id="playBtn">&#9654; Play</button>
+  <button id="resetBtn">&#8634; Reset</button>
   <label>Vel: <input type="range" id="speedSlider" min="1" max="20" value="5">
   <span id="speedLabel">5x</span></label>
   <div style="font-size:12px;color:#aaa">Progreso: <span id="progress">0</span>/<span id="total">0</span></div>
@@ -228,7 +200,6 @@ L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
   maxZoom: 19,
 }).addTo(map);
 
-// Depot marker
 L.circleMarker(DEPOT, {radius:8, color:"#000", fillColor:"#fff", fillOpacity:1, weight:3})
   .addTo(map).bindTooltip("Deposito", {permanent:true, direction:"top"});
 
@@ -245,7 +216,6 @@ let allData = {};
 let playing = false, idx = 0, speed = 5, animTimer = null;
 let currentSector = 0, currentAlgo = "";
 
-// Legend
 const legend = L.control({position:"bottomright"});
 legend.onAdd = function() {
   const div = L.DomUtil.create("div", "legend");
@@ -268,17 +238,14 @@ async function loadRoutes() {
   const resp = await fetch("/api/routes");
   allData = await resp.json();
   document.getElementById("status").textContent = "Listo";
-  document.getElementById("infoBox").innerHTML = "Selecciona sector y algoritmo, luego Play";
+  document.getElementById("infoBox").innerHTML = "Elige sector y algoritmo, luego Play";
   updateBgRoutes();
   updateLegend();
   selectBestAlgo(0);
 }
 
 function updateBgRoutes() {
-  for (const key of Object.keys(bgLines)) {
-    map.removeLayer(bgLines[key]);
-    delete bgLines[key];
-  }
+  for (const key of Object.keys(bgLines)) { map.removeLayer(bgLines[key]); delete bgLines[key]; }
   for (const [skey, route] of Object.entries(allData)) {
     const sid = parseInt(skey.split(":")[0]);
     const isActive = (sid === currentSector);
@@ -293,25 +260,23 @@ function updateBgRoutes() {
 function updateLegend() {
   let h = "<b>Rutas (" + (currentAlgo ? ALGO_NAMES[currentAlgo] : "---") + ")</b><br>";
   for (let s = 0; s < 5; s++) {
-    const skey = s + ":" + (currentAlgo || Object.keys(ALGO_NAMES)[0]);
-    const r = allData[skey];
+    const r = allData[s + ":" + (currentAlgo || "voraz")];
     if (r) {
       h += '<i style="background:' + COLORS[s] + '"></i> S' + s + ': ' + r.dist_km + 'km';
-      if (s === currentSector) h += ' <b>★</b>';
+      if (s === currentSector) h += ' <b>&#9733;</b>';
       h += '<br>';
     }
   }
   h += '<hr style="border-color:#444;margin:4px 0">';
   h += '<i style="background:#e67e22"></i> Recorrido<br>';
-  h += '<i style="background:#e74c3c"></i> Retorno depósito';
+  h += '<i style="background:#e74c3c"></i> Retorno dep&oacute;sito';
   document.getElementById("legendDiv").innerHTML = h;
 }
 
 function selectBestAlgo(sector) {
-  const best = BEST_ALGO[sector];
-  document.getElementById("algoSelect").value = best;
-  currentAlgo = best;
+  currentAlgo = BEST_ALGO[sector];
   currentSector = sector;
+  document.getElementById("algoSelect").value = currentAlgo;
   document.getElementById("sectorSelect").value = sector;
   resetAnim();
   updateBgRoutes();
@@ -319,8 +284,7 @@ function selectBestAlgo(sector) {
 }
 
 function getCurrentRoute() {
-  const skey = currentSector + ":" + currentAlgo;
-  return allData[skey];
+  return allData[currentSector + ":" + currentAlgo];
 }
 
 function loadAnimation() {
@@ -336,7 +300,7 @@ function loadAnimation() {
 function resetAnim() {
   if (animTimer) { clearInterval(animTimer); animTimer = null; }
   playing = false;
-  document.getElementById("playBtn").textContent = "▶ Play";
+  document.getElementById("playBtn").textContent = "\u25B6 Play";
   idx = 0;
   trailLine.setLatLngs([]);
   returnLine.setLatLngs([]);
@@ -345,20 +309,18 @@ function resetAnim() {
   document.getElementById("status").textContent = "Reiniciado";
 }
 
-function updateProgress() {
-  document.getElementById("progress").textContent = idx;
-}
+function updateProgress() { document.getElementById("progress").textContent = idx; }
 
 function doReturnPath() {
   playing = false;
-  document.getElementById("playBtn").textContent = "▶ Play";
+  document.getElementById("playBtn").textContent = "\u25B6 Play";
   if (animTimer) { clearInterval(animTimer); animTimer = null; }
-  document.getElementById("status").textContent = "Retornando al depósito...";
   const route = getCurrentRoute();
-  if (!route || !route.return_coords || !route.return_coords.length) {
+  if (!route || !route.return_coords || route.return_coords.length < 2) {
     document.getElementById("status").textContent = "Completado";
     return;
   }
+  document.getElementById("status").textContent = "Retornando al dep\u00f3sito...";
   returnLine.setLatLngs(route.return_coords);
   let ri = 0;
   const retTimer = setInterval(function() {
@@ -369,9 +331,6 @@ function doReturnPath() {
     } else {
       clearInterval(retTimer);
       document.getElementById("status").textContent = "Completado";
-      document.getElementById("infoBox").innerHTML =
-        ALGO_NAMES[currentAlgo] + " S" + currentSector + ": " +
-        (route.dist_km + (route.return_coords.length > 0 ? " (con retorno)" : "")).toString();
     }
   }, Math.max(10, 80 / speed));
 }
@@ -385,7 +344,7 @@ function stepAnimation() {
     trailLine.setLatLngs(route.coords.slice(0, idx + 1));
     updateProgress();
     document.getElementById("infoBox").innerHTML =
-      ALGO_NAMES[currentAlgo] + " S" + currentSector + " — paso " + idx + "/" + route.coords.length;
+      ALGO_NAMES[currentAlgo] + " S" + currentSector + " \u2014 paso " + idx + "/" + route.coords.length;
   } else {
     document.getElementById("status").textContent = "Circuito completado";
     doReturnPath();
@@ -397,13 +356,12 @@ function togglePlay() {
   if (!route) return;
   const btn = document.getElementById("playBtn");
   if (playing) {
-    playing = false; btn.textContent = "▶ Play";
+    playing = false; btn.textContent = "\u25B6 Play";
     if (animTimer) { clearInterval(animTimer); animTimer = null; }
   } else {
     if (idx >= route.coords.length) resetAnim();
-    playing = true; btn.textContent = "⏸ Pause";
-    const interval = Math.max(10, 80 / speed);
-    animTimer = setInterval(stepAnimation, interval);
+    playing = true; btn.textContent = "\u23F8 Pause";
+    animTimer = setInterval(stepAnimation, Math.max(10, 80 / speed));
   }
 }
 
@@ -421,13 +379,9 @@ document.getElementById("algoSelect").addEventListener("change", function() {
 document.getElementById("speedSlider").addEventListener("input", function() {
   speed = parseInt(this.value);
   document.getElementById("speedLabel").textContent = speed + "x";
-  if (playing) {
-    if (animTimer) clearInterval(animTimer);
-    animTimer = setInterval(stepAnimation, Math.max(10, 80 / speed));
-  }
+  if (playing) { if (animTimer) clearInterval(animTimer); animTimer = setInterval(stepAnimation, Math.max(10, 80 / speed)); }
 });
 
-// Start
 selectBestAlgo(0);
 loadRoutes();
 </script>
@@ -443,8 +397,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/" or path == "/index.html":
             self._serve_html()
         elif path == "/api/routes":
-            self._serve_json({f"{s}:{k}": v for (s, k), v in all_routes.items()
-                              if k != "mcp"})
+            self._serve_json({f"{s}:{k}": {
+                "coords": v["coords"], "return_coords": v["return_coords"],
+                "dist_km": v["dist_km"], "serv_km": v["serv_km"],
+                "redund": v["redund"], "extra": v["extra"],
+            } for (s, k), v in all_routes.items()})
         else:
             self.send_response(404)
             self.end_headers()
